@@ -58,16 +58,12 @@ data/*
 # from its pinned Hugging Face revision and is not duplicated in this repository.
 models/*
 !models/readme.md
-!models/best_brain_model.keras
-!models/cnn_lung_model.pth
-!models/cnn_Kidney_Stone_model.pth
 *.keras
 *.h5
 *.onnx
 *.ckpt
 *.safetensors
 *.zip
-!models/best_brain_model.keras
 
 # Local training, experiments, duplicate repositories, and prototypes
 Multi-organ-diagnostic/
@@ -112,3 +108,7 @@ test_data/
 
 data/
 test_data/
+
+# Active Jeevansh models
+!models/jeevansh/
+!models/jeevansh/*
