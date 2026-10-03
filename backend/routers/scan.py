@@ -203,13 +203,15 @@ def _validate_scan_matches_selected_type(image: Image.Image, scan_type: str, mod
     contrast = float(gray_rgb.std())
     dynamic_range = float(np.quantile(gray_rgb, 0.95) - np.quantile(gray_rgb, 0.05))
 
-    # Reject only inputs that are clearly unusable by either grayscale model.
+    # Reject only inputs that are clearly unusable by grayscale models.
     # The relaxed colour threshold tolerates scanner overlays and compression.
-    if channel_delta > 0.14:
-        _reject_bad_scan(
-            "This does not look like a grayscale medical image. "
-            "Upload the original chest X-ray or brain MRI image."
-        )
+    # NOTE: Skin cancer dermatoscopy is an RGB color modality and must NOT be rejected for color!
+    if scan_type in ["pneumonia", "brain_tumor", "bone_fracture"]:
+        if channel_delta > 0.14:
+            _reject_bad_scan(
+                f"This does not look like a grayscale medical image. "
+                f"Upload the original {scan_type.replace('_', ' ')} scan."
+            )
     if contrast < 0.02 or dynamic_range < 0.07:
         _reject_bad_scan(
             "This image does not have enough contrast for reliable analysis. "

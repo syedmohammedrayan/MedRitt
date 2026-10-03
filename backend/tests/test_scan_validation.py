@@ -38,9 +38,20 @@ class ScanValidationTests(unittest.TestCase):
         y, x = np.mgrid[0:256, 0:256]
         colour = np.stack((x, y, (x + y) % 256), axis=-1).astype(np.uint8)
         image = Image.fromarray(colour, mode="RGB")
-        for scan_type, modality in (("brain_tumor", "MRI"), ("pneumonia", "X-ray")):
+        for scan_type, modality in (("brain_tumor", "MRI"), ("pneumonia", "X-ray"), ("bone_fracture", "X-ray")):
             with self.subTest(scan_type=scan_type), self.assertRaises(HTTPException):
                 _validate_scan_matches_selected_type(image, scan_type, modality)
+
+    def test_skin_cancer_color_image_is_accepted(self):
+        # Full-colour dermatoscopic skin lesion images must pass validation for skin_cancer
+        y, x = np.mgrid[0:256, 0:256]
+        colour = np.stack((x, y, (x + y) % 256), axis=-1).astype(np.uint8)
+        image = Image.fromarray(colour, mode="RGB")
+        try:
+            _validate_scan_matches_selected_type(image, "skin_cancer", "Dermatoscopy")
+        except HTTPException as exc:
+            self.fail(f"Color skin cancer image was unexpectedly rejected: {exc.detail}")
+
 
 if __name__ == "__main__":
     unittest.main()
