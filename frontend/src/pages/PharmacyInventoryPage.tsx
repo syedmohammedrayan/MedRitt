@@ -92,7 +92,7 @@ export default function PharmacyInventoryPage() {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'medora-inventory-template.csv';
+    anchor.download = 'medritt-inventory-template.csv';
     anchor.click();
     URL.revokeObjectURL(url);
   };

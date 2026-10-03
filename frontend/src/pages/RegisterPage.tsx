@@ -29,7 +29,7 @@ export default function RegisterPage() {
   return (
     <div className="login-page">
       <section className="login-editorial">
-        <div className="login-brand"><BrandLogo className="medora-logo--auth" /><span>Patient access</span></div>
+        <div className="login-brand"><BrandLogo className="medritt-logo--auth" /><span>Patient access</span></div>
         <div className="login-hero-copy">
           <p className="eyebrow eyebrow--light">One connected care journey</p>
           <h1>Your care.<br /><em>In one place.</em></h1>

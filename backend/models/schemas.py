@@ -1,5 +1,5 @@
 """
-MedoraAI — Pydantic Request/Response Schemas
+MedRittAI — Pydantic Request/Response Schemas
 Defines all API contracts for the REST endpoints.
 """
 

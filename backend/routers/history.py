@@ -1,5 +1,5 @@
 """
-MedoraAI — History Router
+MedRittAI — History Router
 Returns and manages scan history for the authenticated user.
 """
 

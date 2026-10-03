@@ -1,5 +1,5 @@
 """
-MedoraAI — Application Configuration
+MedRittAI — Application Configuration
 Loads settings from environment variables / .env file.
 """
 
@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "info"
 
     # --- Security ---
-    SECRET_KEY: str = "medoraai-hackathon-change-in-production"
+    SECRET_KEY: str = "medrittai-hackathon-change-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY_HOURS: int = 8
 

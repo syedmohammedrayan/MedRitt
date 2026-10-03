@@ -3,76 +3,76 @@ import re
 
 replacements = [
     (
-        r"C:\\MedoraAI\\frontend\\src\\components\\BrandLogo.tsx",
+        r"C:\\MedRittAI\\frontend\\src\\components\\BrandLogo.tsx",
         [
-            ("import medoraLogo from '../../../medora_logo-removebg-preview.png';", "import brandLogo from '../../../MedRittAI_Healthcare_Logo-removebg-preview.png';"),
-            ("import medoraLoginLogo from '../../../medora_logo.jpeg';", ""),
-            ("src={isLoginLogo ? medoraLoginLogo : medoraLogo}", "src={brandLogo}"),
-            ("alt=\"MedoraAI logo\"", "alt=\"MedRittAI logo\"")
+            ("import medrittLogo from '../../../medritt_logo-removebg-preview.png';", "import brandLogo from '../../../MedRittAI_Healthcare_Logo-removebg-preview.png';"),
+            ("import medrittLoginLogo from '../../../medritt_logo.jpeg';", ""),
+            ("src={isLoginLogo ? medrittLoginLogo : medrittLogo}", "src={brandLogo}"),
+            ("alt=\"MedRittAI logo\"", "alt=\"MedRittAI logo\"")
         ]
     ),
     (
-        r"C:\\MedoraAI\\frontend\\src\\api\\client.ts",
-        [("MedoraAI_Report_", "MedRittAI_Report_")]
+        r"C:\\MedRittAI\\frontend\\src\\api\\client.ts",
+        [("MedRittAI_Report_", "MedRittAI_Report_")]
     ),
     (
-        r"C:\\MedoraAI\\frontend\\public\\site.webmanifest",
-        [("MedoraAI", "MedRittAI")]
+        r"C:\\MedRittAI\\frontend\\public\\site.webmanifest",
+        [("MedRittAI", "MedRittAI")]
     ),
     (
-        r"C:\\MedoraAI\\frontend\\index.html",
-        [("MedoraAI", "MedRittAI"), ("Medora clinical", "MedRittAI clinical")]
+        r"C:\\MedRittAI\\frontend\\index.html",
+        [("MedRittAI", "MedRittAI"), ("MedRitt clinical", "MedRittAI clinical")]
     ),
     (
-        r"C:\\MedoraAI\\frontend\\src\\pages\\LandingPage.tsx",
-        [("MedoraAI", "MedRittAI")]
+        r"C:\\MedRittAI\\frontend\\src\\pages\\LandingPage.tsx",
+        [("MedRittAI", "MedRittAI")]
     ),
     (
-        r"C:\\MedoraAI\\backend\\services\\pdf_generator.py",
+        r"C:\\MedRittAI\\backend\\services\\pdf_generator.py",
         [
-            ('title=f"MedoraAI', 'title=f"MedRittAI'),
-            ('author="MedoraAI"', 'author="MedRittAI"'),
-            ('"MEDORAAI  /  CLINICAL IMAGING"', '"MEDRITTAI  /  CLINICAL IMAGING"'),
-            ('Paragraph("MedoraAI · Complete Case Study"', 'Paragraph("MedRittAI · Complete Case Study"'),
-            ('"MedoraAI Final Clinical', '"MedRittAI Final Clinical'),
-            ('"MedoraAI Preliminary', '"MedRittAI Preliminary')
+            ('title=f"MedRittAI', 'title=f"MedRittAI'),
+            ('author="MedRittAI"', 'author="MedRittAI"'),
+            ('"MEDRITTAI  /  CLINICAL IMAGING"', '"MEDRITTAI  /  CLINICAL IMAGING"'),
+            ('Paragraph("MedRittAI · Complete Case Study"', 'Paragraph("MedRittAI · Complete Case Study"'),
+            ('"MedRittAI Final Clinical', '"MedRittAI Final Clinical'),
+            ('"MedRittAI Preliminary', '"MedRittAI Preliminary')
         ]
     ),
     (
-        r"C:\\MedoraAI\\backend\\services\\llm_report_engine.py",
-        [("MedoraAI", "MedRittAI")]
+        r"C:\\MedRittAI\\backend\\services\\llm_report_engine.py",
+        [("MedRittAI", "MedRittAI")]
     ),
     (
-        r"C:\\MedoraAI\\backend\\templates\\report.html",
-        [("MedoraAI", "MedRittAI")]
+        r"C:\\MedRittAI\\backend\\templates\\report.html",
+        [("MedRittAI", "MedRittAI")]
     ),
     (
-        r"C:\\MedoraAI\\backend\\templates\\report.txt",
-        [("MEDORAAI", "MEDRITTAI")]
+        r"C:\\MedRittAI\\backend\\templates\\report.txt",
+        [("MEDRITTAI", "MEDRITTAI")]
     ),
     (
-        r"C:\\MedoraAI\\backend\\routers\\report.py",
-        [("MedoraAI_Report_", "MedRittAI_Report_")]
+        r"C:\\MedRittAI\\backend\\routers\\report.py",
+        [("MedRittAI_Report_", "MedRittAI_Report_")]
     ),
     (
-        r"C:\\MedoraAI\\backend\\routers\\case_study.py",
-        [("MedoraAI_Case_", "MedRittAI_Case_")]
+        r"C:\\MedRittAI\\backend\\routers\\case_study.py",
+        [("MedRittAI_Case_", "MedRittAI_Case_")]
     ),
     (
-        r"C:\\MedoraAI\\backend\\config.py",
-        [('APP_NAME: str = "MedoraAI"', 'APP_NAME: str = "MedRittAI"')]
+        r"C:\\MedRittAI\\backend\\config.py",
+        [('APP_NAME: str = "MedRittAI"', 'APP_NAME: str = "MedRittAI"')]
     ),
     (
-        r"C:\\MedoraAI\\backend\\main.py",
+        r"C:\\MedRittAI\\backend\\main.py",
         [
-            ("MedoraAI Diagnostic", "MedRittAI Diagnostic"),
-            ("MedoraAI backend", "MedRittAI backend"),
-            ("MedoraAI shutting", "MedRittAI shutting"),
-            ("Medora Administrator", "MedRitt Administrator"),
-            ("Medora Care Pharmacy", "MedRitt Care Pharmacy"),
-            ("Medora Hospital", "MedRitt Hospital"),
-            ("pharmacy@medora.local", "pharmacy@medritt.local"),
-            ('title="MedoraAI API"', 'title="MedRittAI API"')
+            ("MedRittAI Diagnostic", "MedRittAI Diagnostic"),
+            ("MedRittAI backend", "MedRittAI backend"),
+            ("MedRittAI shutting", "MedRittAI shutting"),
+            ("MedRitt Administrator", "MedRitt Administrator"),
+            ("MedRitt Care Pharmacy", "MedRitt Care Pharmacy"),
+            ("MedRitt Hospital", "MedRitt Hospital"),
+            ("pharmacy@medritt.local", "pharmacy@medritt.local"),
+            ('title="MedRittAI API"', 'title="MedRittAI API"')
         ]
     )
 ]

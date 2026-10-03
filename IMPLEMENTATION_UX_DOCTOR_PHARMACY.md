@@ -1,4 +1,4 @@
-# MedoraAI UX, Doctor Administration, Report, and Pharmacy Implementation
+# MedRittAI UX, Doctor Administration, Report, and Pharmacy Implementation
 
 ## Goal
 

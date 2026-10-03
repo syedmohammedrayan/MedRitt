@@ -1,5 +1,5 @@
 """
-MedoraAI — CRUD Operations
+MedRittAI — CRUD Operations
 Database create/read/update operations for all models.
 """
 

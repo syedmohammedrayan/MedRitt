@@ -1,5 +1,5 @@
 /**
- * MedoraAI — Scan Hooks
+ * MedRittAI — Scan Hooks
  * Upload + Analyze workflow hooks with step-based progress tracking.
  */
 

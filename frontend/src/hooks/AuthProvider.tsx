@@ -1,5 +1,5 @@
 /**
- * MedoraAI — Auth Provider
+ * MedRittAI — Auth Provider
  * Provides authentication state and login/logout actions.
  */
 
@@ -10,13 +10,13 @@ import { AuthContext } from './authContext';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(
-    localStorage.getItem('medoraai_token')
+    localStorage.getItem('medrittai_token')
   );
   const [username, setUsername] = useState<string | null>(
-    localStorage.getItem('medoraai_username')
+    localStorage.getItem('medrittai_username')
   );
   const [user, setUser] = useState<UserSummary | null>(() => {
-    const saved = localStorage.getItem('medoraai_user');
+    const saved = localStorage.getItem('medrittai_user');
     try { return saved ? JSON.parse(saved) : null; } catch { return null; }
   });
   const [loading, setLoading] = useState(false);
@@ -29,8 +29,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         getMe().then((identity) => {
           setUser(identity);
           setUsername(identity.username);
-          localStorage.setItem('medoraai_user', JSON.stringify(identity));
-          localStorage.setItem('medoraai_username', identity.username);
+          localStorage.setItem('medrittai_user', JSON.stringify(identity));
+          localStorage.setItem('medrittai_username', identity.username);
         }).catch(() => {
           apiLogout();
           setToken(null);
@@ -47,8 +47,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(res.access_token);
       setUsername(data.username);
       setUser(res.user);
-      localStorage.setItem('medoraai_username', data.username);
-      localStorage.setItem('medoraai_user', JSON.stringify(res.user));
+      localStorage.setItem('medrittai_username', data.username);
+      localStorage.setItem('medrittai_user', JSON.stringify(res.user));
     } catch (err: any) {
       const message = err.response?.data?.detail || 'Login failed. Please try again.';
       setError(message);
@@ -66,8 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(res.access_token);
       setUsername(res.user.username);
       setUser(res.user);
-      localStorage.setItem('medoraai_username', res.user.username);
-      localStorage.setItem('medoraai_user', JSON.stringify(res.user));
+      localStorage.setItem('medrittai_username', res.user.username);
+      localStorage.setItem('medrittai_user', JSON.stringify(res.user));
     } catch (err: any) {
       const message = err.response?.data?.detail || 'Registration failed. Please try again.';
       setError(message);
@@ -82,15 +82,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     setUsername(null);
     setUser(null);
-    localStorage.removeItem('medoraai_username');
-    localStorage.removeItem('medoraai_user');
+    localStorage.removeItem('medrittai_username');
+    localStorage.removeItem('medrittai_user');
   }, []);
 
   const setCurrentUser = useCallback((identity: UserSummary) => {
     setUser(identity);
     setUsername(identity.username);
-    localStorage.setItem('medoraai_user', JSON.stringify(identity));
-    localStorage.setItem('medoraai_username', identity.username);
+    localStorage.setItem('medrittai_user', JSON.stringify(identity));
+    localStorage.setItem('medrittai_username', identity.username);
   }, []);
 
   const refreshUser = useCallback(async () => {

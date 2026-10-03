@@ -1,5 +1,5 @@
 """
-MedoraAI — Report Router
+MedRittAI — Report Router
 Retrieve LLM-generated reports and download as PDF.
 """
 

@@ -1,5 +1,5 @@
 """
-MedoraAI — SQLAlchemy ORM Models
+MedRittAI — SQLAlchemy ORM Models
 Tables: users, departments, appointments, diagnostic_orders, scans, results,
 reports, prescriptions, pharmacy_bills, case_studies
 """

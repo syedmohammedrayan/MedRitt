@@ -1,6 +1,6 @@
-# MedoraAI production deployment
+# MedRittAI production deployment
 
-MedoraAI uses three production services:
+MedRittAI uses three production services:
 
 1. **Vercel** — React/Vite frontend
 2. **Neon** — PostgreSQL database for accounts, appointments, reports, and workflow metadata
@@ -21,7 +21,7 @@ The backend creates the schema and demo records on its first successful startup.
 
 1. Create a Railway project and choose **Deploy from GitHub repo**.
 2. In the GitHub repository's **Settings > Archives**, enable **Include Git LFS objects in archives**. The production brain, lung, and kidney weights are stored with Git LFS.
-3. Select `prachidoshi7/MedoraAI` and the branch to deploy.
+3. Select `prachidoshi7/MedRittAI` and the branch to deploy.
 4. Keep the service source at the repository root. Do not set `/backend` as the Root Directory because the Docker build also needs `models/`.
 5. Railway reads `railway.json`, builds `backend/Dockerfile`, and checks `/health` before making a deployment active.
 6. In **Networking**, generate a public Railway domain.
@@ -29,7 +29,7 @@ The backend creates the schema and demo records on its first successful startup.
 The same image can be built locally from the repository root:
 
 ```bash
-docker build -f backend/Dockerfile -t medoraai-api .
+docker build -f backend/Dockerfile -t medrittai-api .
 ```
 
 Add these Railway service variables:

@@ -1,5 +1,5 @@
 """
-MedoraAI — DICOM Parser
+MedRittAI — DICOM Parser
 Converts DICOM (.dcm) medical images to PIL Images and extracts metadata.
 """
 

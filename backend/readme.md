@@ -1,4 +1,4 @@
-# MedoraAI Backend
+# MedRittAI Backend
 
 FastAPI backend for authentication, uploads, ML inference, model attribution, LLM-assisted reports, and PDF export.
 

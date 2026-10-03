@@ -1,5 +1,5 @@
 """
-MedoraAI — FastAPI Application Entry Point
+MedRittAI — FastAPI Application Entry Point
 Main server with lifespan events, CORS, routing, and service initialization.
 """
 

@@ -10,7 +10,7 @@ export default function BrandLogo({ className = '', variant = 'default' }: Brand
   const isLoginLogo = variant === 'login';
 
   return (
-    <span className={`medora-logo ${className}`.trim()}>
+    <span className={`medritt-logo ${className}`.trim()}>
       <img
         src={brandLogo}
         alt="MedRittAI logo"

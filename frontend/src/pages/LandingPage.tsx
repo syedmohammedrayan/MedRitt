@@ -52,10 +52,10 @@ export default function LandingPage() {
           <header><span><i /> Analysis workspace</span><b>CHEST X-RAY</b></header>
           <div className="landing-scan">
             <svg viewBox="0 0 440 470" role="img" aria-label="Stylized chest X-ray">
-              <defs><radialGradient id="medoraLung" cx="50%" cy="42%" r="68%"><stop offset="0" stopColor="#dbe5e8" stopOpacity=".78"/><stop offset="1" stopColor="#53626a" stopOpacity=".18"/></radialGradient></defs>
+              <defs><radialGradient id="medrittLung" cx="50%" cy="42%" r="68%"><stop offset="0" stopColor="#dbe5e8" stopOpacity=".78"/><stop offset="1" stopColor="#53626a" stopOpacity=".18"/></radialGradient></defs>
               <rect width="440" height="470" fill="#11171a"/><path d="M220 46v372" stroke="#b7c1c4" strokeOpacity=".22" strokeWidth="10"/>
-              <path d="M200 78C130 75 77 132 72 235c-4 94 45 168 124 171 21-70 22-251 4-328Z" fill="url(#medoraLung)" stroke="#aebbbf" strokeOpacity=".38"/>
-              <path d="M240 78c70-3 123 54 128 157 4 94-45 168-124 171-21-70-22-251-4-328Z" fill="url(#medoraLung)" stroke="#aebbbf" strokeOpacity=".38"/>
+              <path d="M200 78C130 75 77 132 72 235c-4 94 45 168 124 171 21-70 22-251 4-328Z" fill="url(#medrittLung)" stroke="#aebbbf" strokeOpacity=".38"/>
+              <path d="M240 78c70-3 123 54 128 157 4 94-45 168-124 171-21-70-22-251-4-328Z" fill="url(#medrittLung)" stroke="#aebbbf" strokeOpacity=".38"/>
               {[120,160,200,240,280,320,360].map((y) => <path key={y} d={`M72 ${y} Q220 ${y - 42} 368 ${y}`} fill="none" stroke="#d0d8da" strokeOpacity=".14" strokeWidth="5"/>)}
               <circle cx="292" cy="276" r="52" fill="#e8542a" opacity=".13"/><circle cx="292" cy="276" r="27" fill="#f2a93b" opacity=".18"/>
             </svg>

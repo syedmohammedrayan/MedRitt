@@ -43,7 +43,7 @@ function HomeRedirect() {
 }
 
 function Brand() {
-  return <BrandLogo className="medora-logo--sidebar" />;
+  return <BrandLogo className="medritt-logo--sidebar" />;
 }
 
 const navByRole: Record<UserRole, Array<{ path: string; label: string; icon: string }>> = {
@@ -138,10 +138,10 @@ function ApplicationFrame() {
   const { isAuthenticated, user } = useAuth();
   const location = useLocation();
   const isLandingPage = location.pathname === '/';
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('medoraai_sidebar_collapsed') === 'true');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('medrittai_sidebar_collapsed') === 'true');
   const toggleSidebar = () => setSidebarCollapsed((current) => {
     const next = !current;
-    localStorage.setItem('medoraai_sidebar_collapsed', String(next));
+    localStorage.setItem('medrittai_sidebar_collapsed', String(next));
     return next;
   });
   const dashboardLabels: Partial<Record<UserRole, string>> = {

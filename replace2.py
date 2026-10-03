@@ -3,25 +3,25 @@ import re
 
 replacements = [
     (
-        r"C:\\MedoraAI\\frontend\\src\\pages\\LoginPage.tsx",
-        [("Medora Clinical Workspace", "MedRittAI Clinical Workspace")]
+        r"C:\\MedRittAI\\frontend\\src\\pages\\LoginPage.tsx",
+        [("MedRitt Clinical Workspace", "MedRittAI Clinical Workspace")]
     ),
     (
-        r"C:\\MedoraAI\\frontend\\src\\pages\\PharmacyBillPage.tsx",
+        r"C:\\MedRittAI\\frontend\\src\\pages\\PharmacyBillPage.tsx",
         [
-            ("Medora clinician", "MedRitt clinician"),
-            ("MedoraAI", "MedRittAI")
+            ("MedRitt clinician", "MedRitt clinician"),
+            ("MedRittAI", "MedRittAI")
         ]
     ),
     (
-        r"C:\\MedoraAI\\frontend\\src\\pages\\RegisterPage.tsx",
-        [("MedoraAI", "MedRittAI")]
+        r"C:\\MedRittAI\\frontend\\src\\pages\\RegisterPage.tsx",
+        [("MedRittAI", "MedRittAI")]
     ),
     (
-        r"C:\\MedoraAI\\frontend\\src\\pages\\CaseStudyView.tsx",
+        r"C:\\MedRittAI\\frontend\\src\\pages\\CaseStudyView.tsx",
         [
-            ("MedoraAI_Case_", "MedRittAI_Case_"),
-            ("MedoraAI Hospital Intelligence", "MedRittAI Hospital Intelligence")
+            ("MedRittAI_Case_", "MedRittAI_Case_"),
+            ("MedRittAI Hospital Intelligence", "MedRittAI Hospital Intelligence")
         ]
     )
 ]

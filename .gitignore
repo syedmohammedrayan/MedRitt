@@ -1,4 +1,4 @@
-# MedoraAI repository allowlist/cleanup rules
+# MedRittAI repository allowlist/cleanup rules
 
 # Secrets and local configuration
 .env
@@ -87,7 +87,7 @@ docs/
 /implementation_front.md
 /implementation_plan.md
 /implmeeeettt.md
-/medora-proto.html
+/medritt-proto.html
 /task.md
 /backend/_check_layers.py
 /frontend/src/assets/
@@ -112,3 +112,4 @@ test_data/
 # Active Jeevansh models
 !models/jeevansh/
 !models/jeevansh/*
+test_data/

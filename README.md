@@ -1,8 +1,8 @@
-# MedoraAI
+# MedRittAI
 
-MedoraAI is a multi-role hospital diagnostic workflow platform connecting patients, doctors, lab technicians, and explainable AI. It covers appointment booking, consultation, diagnostic ordering, scan analysis, doctor sign-off, prescriptions, native-language patient communication, and final case-study export.
+MedRittAI is a multi-role hospital diagnostic workflow platform connecting patients, doctors, lab technicians, and explainable AI. It covers appointment booking, consultation, diagnostic ordering, scan analysis, doctor sign-off, prescriptions, native-language patient communication, and final case-study export.
 
-> **Clinical safety notice:** MedoraAI is an experimental decision-support project, not a certified medical device. Its output is preliminary and must be reviewed against the complete source examination by a qualified clinician. Do not use it as the sole basis for diagnosis or treatment.
+> **Clinical safety notice:** MedRittAI is an experimental decision-support project, not a certified medical device. Its output is preliminary and must be reviewed against the complete source examination by a qualified clinician. Do not use it as the sole basis for diagnosis or treatment.
 
 ## Features
 
@@ -20,7 +20,7 @@ MedoraAI is a multi-role hospital diagnostic workflow platform connecting patien
 - Patient-friendly explanations with Sarvam translation and an internal fallback path
 - Native ReportLab PDF generation that works on Windows without GTK/Pango
 - JWT authentication, scan history, thumbnails, and generated-report storage
-- Responsive React interface based on the Medora prototype design
+- Responsive React interface based on the MedRitt prototype design
 
 ## Technology
 
@@ -39,7 +39,7 @@ MedoraAI is a multi-role hospital diagnostic workflow platform connecting patien
 ## Repository Layout
 
 ```text
-MedoraAI/
+MedRittAI/
 ├── backend/                 FastAPI application, classifiers and tests
 │   ├── routers/             Auth, appointment, diagnostic, report and case routes
 │   ├── services/            Models, validation, attribution, reports and PDF
@@ -77,8 +77,8 @@ The three bundled runtime model binaries are versioned with Git LFS. Install Git
 Clone and enter the repository:
 
 ```powershell
-git clone https://github.com/AcID3r/MedoraAI.git
-cd MEDORAAA_AI
+git clone https://github.com/AcID3r/MedRittAI.git
+cd MEDRITTAA_AI
 git lfs pull
 ```
 

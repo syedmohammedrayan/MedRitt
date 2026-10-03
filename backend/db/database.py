@@ -1,5 +1,5 @@
 """
-MedoraAI — Database Engine & Session Management
+MedRittAI — Database Engine & Session Management
 SQLite via SQLAlchemy 2.0 ORM
 """
 

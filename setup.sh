@@ -15,7 +15,7 @@ if [ ! -f "$ROOT_DIR/.env" ] && [ -f "$ROOT_DIR/.env.example" ]; then
 fi
 
 cat <<'MSG'
-MedoraAI setup complete.
+MedRittAI setup complete.
 
 Next steps:
   1. Add an LLM API key to .env if available. Groq is the recommended first option.

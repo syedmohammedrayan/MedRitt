@@ -43,7 +43,7 @@ export default function LoginPage() {
     <div className="login-page">
       <section className="login-editorial" aria-labelledby="login-wordmark">
         <div className="login-brand">
-          <BrandLogo className="medora-logo--auth" variant="login" />
+          <BrandLogo className="medritt-logo--auth" variant="login" />
           <span>Clinical imaging</span>
         </div>
         <div className="login-hero-copy">

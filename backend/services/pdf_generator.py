@@ -1,4 +1,4 @@
-"""MedoraAI professional clinical PDF generation."""
+"""MedRittAI professional clinical PDF generation."""
 
 import io
 import logging
@@ -436,15 +436,15 @@ class PDFGenerator:
         )
         styles = getSampleStyleSheet()
         title = ParagraphStyle(
-            "MedoraCaseTitle", parent=styles["Title"], textColor=colors.HexColor("#15343B"),
+            "MedRittCaseTitle", parent=styles["Title"], textColor=colors.HexColor("#15343B"),
             fontSize=20, leading=24, spaceAfter=5,
         )
         heading = ParagraphStyle(
-            "MedoraCaseHeading", parent=styles["Heading2"], textColor=colors.HexColor("#0B7285"),
+            "MedRittCaseHeading", parent=styles["Heading2"], textColor=colors.HexColor("#0B7285"),
             fontSize=11, leading=14, spaceBefore=12, spaceAfter=5,
         )
         body = ParagraphStyle(
-            "MedoraCaseBody", parent=styles["BodyText"], fontSize=9.5, leading=14,
+            "MedRittCaseBody", parent=styles["BodyText"], fontSize=9.5, leading=14,
             textColor=colors.HexColor("#273238"),
         )
         patient = case_study.get("patient", {})
@@ -525,7 +525,7 @@ class PDFGenerator:
             Paragraph(
                 "This case study consolidates AI-supported imaging findings and clinician documentation. "
                 "Clinical decisions remain the responsibility of the treating medical team.",
-                ParagraphStyle("MedoraCaseDisclaimer", parent=body, fontSize=7.5, leading=10, textColor=colors.HexColor("#66777C")),
+                ParagraphStyle("MedRittCaseDisclaimer", parent=body, fontSize=7.5, leading=10, textColor=colors.HexColor("#66777C")),
             ),
         ])
         doc.build(story)

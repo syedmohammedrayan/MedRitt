@@ -1,5 +1,5 @@
 /**
- * MedoraAI — Auth Hook
+ * MedRittAI — Auth Hook
  */
 
 import { useContext } from 'react';

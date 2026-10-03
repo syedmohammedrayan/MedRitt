@@ -1,5 +1,5 @@
 """
-MedoraAI — Authentication Router
+MedRittAI — Authentication Router
 JWT-based login with bcrypt password hashing.
 """
 

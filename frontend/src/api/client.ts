@@ -1,5 +1,5 @@
 /**
- * MedoraAI — API Client
+ * MedRittAI — API Client
  * Axios-based HTTP client with JWT auth.
  */
 
@@ -29,15 +29,15 @@ export function apiAssetUrl(path: string): string {
 export function setAuthToken(token: string | null) {
   if (token) {
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    localStorage.setItem('medoraai_token', token);
+    localStorage.setItem('medrittai_token', token);
   } else {
     delete api.defaults.headers.common['Authorization'];
-    localStorage.removeItem('medoraai_token');
+    localStorage.removeItem('medrittai_token');
   }
 }
 
 // Restore token from localStorage on load
-const savedToken = localStorage.getItem('medoraai_token');
+const savedToken = localStorage.getItem('medrittai_token');
 if (savedToken) {
   setAuthToken(savedToken);
 }

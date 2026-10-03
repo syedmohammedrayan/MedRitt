@@ -3,15 +3,15 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: medoraai-backend
+    container_name: medrittai-backend
     ports:
       - "8000:8000"
     volumes:
       - ./models:/app/models:ro
 
-      - medoraai-data:/app/data
+      - medrittai-data:/app/data
     environment:
-      - SECRET_KEY=${SECRET_KEY:-medoraai-hackathon-secret}
+      - SECRET_KEY=${SECRET_KEY:-medrittai-hackathon-secret}
       - DATA_DIR=/app/data
 
       - MAIRA_API_URL=${MAIRA_API_URL:-https://grass-quiet-icy.ngrok-free.dev}
@@ -41,12 +41,12 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: medoraai-frontend
+    container_name: medrittai-frontend
     ports:
       - "3000:3000"
     depends_on:
       - backend
 
 volumes:
-  medoraai-data:
+  medrittai-data:
     driver: local

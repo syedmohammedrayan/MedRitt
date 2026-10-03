@@ -1,5 +1,5 @@
 /**
- * MedoraAI — Types & Configuration
+ * MedRittAI — Types & Configuration
  * Type definitions and scan configuration for the diagnostic platform.
  */
 

@@ -1,6 +1,6 @@
-# MedoraAI Frontend
+# MedRittAI Frontend
 
-React + TypeScript + Vite frontend for the MedoraAI demo.
+React + TypeScript + Vite frontend for the MedRittAI demo.
 
 ## Setup
 

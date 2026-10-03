@@ -1,5 +1,5 @@
 """
-MedoraAI — Scan Upload & Analysis Router
+MedRittAI — Scan Upload & Analysis Router
 Handles image upload, validation, and dual-model AI inference pipeline.
 """
 

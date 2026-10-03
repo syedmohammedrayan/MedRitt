@@ -1,4 +1,4 @@
-# MedoraAI backend runtime dependencies
+# MedRittAI backend runtime dependencies
 # Supported interpreter: Python 3.11
 
 # API and multipart uploads
