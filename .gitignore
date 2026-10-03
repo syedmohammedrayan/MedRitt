@@ -1,0 +1,114 @@
+# MedoraAI repository allowlist/cleanup rules
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python environments, caches, and test output
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.egg-info/
+build/
+dist/
+
+# Frontend dependencies and generated output
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE, OS, and local agent state
+.agents/
+.tmp/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+tempCodeRunnerFile.py
+
+# Runtime medical data: never commit patient uploads or the SQLite database
+backend/data/
+data/*
+!data/.gitkeep
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Keep only bundled model artifacts used by the application. RAD-DINO is fetched
+# from its pinned Hugging Face revision and is not duplicated in this repository.
+models/*
+!models/readme.md
+!models/best_brain_model.keras
+!models/cnn_lung_model.pth
+!models/cnn_Kidney_Stone_model.pth
+*.keras
+*.h5
+*.onnx
+*.ckpt
+*.safetensors
+*.zip
+!models/best_brain_model.keras
+
+# Local training, experiments, duplicate repositories, and prototypes
+Multi-organ-diagnostic/
+MedVision-AI/
+brain_tumor_analysis/
+brainnn/
+assests/
+datasets/
+demo/
+files/
+notebooks/
+presentation/
+report/
+tools/
+docs/
+*.ipynb
+*.pdf
+
+# Superseded planning/demo artifacts (not required to run a clone)
+/HACKATHON_VIDEO_DEMO_GUIDE.md
+/implementation_front.md
+/implementation_plan.md
+/implmeeeettt.md
+/medora-proto.html
+/task.md
+/backend/_check_layers.py
+/frontend/src/assets/
+/frontend/public/icons.svg
+
+# Framework/tool state
+.streamlit/
+.cache/
+.tox/
+.nox/
+.pdm-python
+.pdm-build/
+.pixi/
+__pypackages__/
+data/
+
+test_data/
+
+data/
+test_data/

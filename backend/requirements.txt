@@ -1,0 +1,40 @@
+# MedoraAI backend runtime dependencies
+# Supported interpreter: Python 3.11
+
+# API and multipart uploads
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-multipart==0.0.9
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+# Passlib 1.7.4 expects bcrypt's legacy version metadata API.
+bcrypt==4.0.1
+
+# Database and configuration
+sqlalchemy==2.0.31
+psycopg[binary]==3.2.9
+pydantic-settings==2.3.4
+python-dotenv==1.0.1
+
+# Imaging and DICOM
+pillow==10.4.0
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+pydicom==2.4.4
+
+# PyTorch classifiers, RAD-DINO and explainability
+torch==2.4.1
+torchvision==0.19.1
+grad-cam==1.5.4
+transformers==5.10.1
+huggingface-hub==1.27.0
+
+# TensorFlow brain MRI classifier
+tensorflow-cpu==2.16.1
+
+# Reports, translation, and provider HTTP APIs
+jinja2==3.1.6
+reportlab==4.4.10
+httpx==0.28.1

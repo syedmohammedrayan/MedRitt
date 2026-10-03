@@ -1,0 +1,47 @@
+MEDRITTAI CLINICAL DECISION-SUPPORT REPORT
+Report ID: {{ report_id }}
+Scan ID: {{ scan_id }}
+Generated: {{ generated_at }}
+
+PATIENT
+Patient ID: {{ patient_id }}
+Scan Date: {{ scan_date }}
+Scan Type: {{ scan_type }}
+Modality: {{ modality }}
+
+AI ANALYSIS
+Primary Finding: {{ top_label }}
+Confidence: {{ "%.1f"|format(confidence * 100) }}%
+Severity: {{ severity }}
+
+CLINICAL HISTORY
+{{ clinical_history }}
+
+TECHNIQUE
+{{ technique }}
+
+IMAGE QUALITY / LIMITATIONS
+{{ image_quality }}
+
+FINDINGS
+{{ findings }}
+
+IMPRESSION
+{{ impression }}
+
+{% if doctor_assessment %}
+DOCTOR CLINICAL ASSESSMENT
+{{ doctor_assessment }}
+{% endif %}
+
+DIFFERENTIAL DIAGNOSIS
+{{ differential_diagnosis }}
+
+RECOMMENDATIONS
+{{ recommendations }}
+
+CRITICAL COMMUNICATION
+{{ critical_communication }}
+
+DISCLAIMER
+{{ disclaimer }}
