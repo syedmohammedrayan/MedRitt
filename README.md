@@ -1,9 +1,4 @@
 # MedRittAI
-## Final Architecture
-
-- SQLite = only application database
-- Cloudinary = only persistent file/asset storage
-
 
 MedRittAI is a multi-role hospital diagnostic workflow platform connecting patients, doctors, lab technicians, and explainable AI. It covers appointment booking, consultation, diagnostic ordering, scan analysis, doctor sign-off, prescriptions, native-language patient communication, and final case-study export.
 
