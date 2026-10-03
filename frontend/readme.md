@@ -38,10 +38,3 @@ npm run build
 ```
 
 Vite recommends Node.js 20.19+ or 22.12+. Older Node versions may still build but show a warning.
-
-## Demo Login
-
-```text
-username: demo
-password: demo123
-```

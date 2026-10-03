@@ -84,6 +84,19 @@ async def get_report(
     findings = report.edited_findings or report_data.get("findings", "")
     impression = report.edited_impression or report_data.get("impression", "")
 
+    result = crud.get_result_by_scan(db, scan_id)
+    scan_orig_url = getattr(scan, "original_image_url", None) or f"/static/uploads/{scan_id}.png"
+    scan_heatmap_url = getattr(scan, "heatmap_url", None) or f"/static/heatmaps/{scan_id}.png"
+    result_overlay_url = getattr(result, "overlay_url", None) or scan_heatmap_url
+    result_task_type = getattr(result, "task_type", None) or ("detection" if scan.scan_type in {"brain_tumor", "bone_fracture"} else "classification")
+    raw_bboxes = getattr(result, "bounding_boxes", None)
+    bboxes = []
+    if raw_bboxes:
+        try:
+            bboxes = json.loads(raw_bboxes) if isinstance(raw_bboxes, str) else raw_bboxes
+        except Exception:
+            bboxes = []
+
     return ReportResponse(
         scan_id=scan_id,
         report=ReportData(
@@ -105,11 +118,16 @@ async def get_report(
             severity=report_data.get("severity", None),
             disclaimer=report_data.get("disclaimer", ""),
             generated_at=report.generated_at.isoformat() if report.generated_at else "",
-            heatmap_target_label=report_data.get("heatmap_target_label", ""),
-            is_low_confidence=report_data.get("is_low_confidence", False),
+            heatmap_target_label=report_data.get("heatmap_target_label") or "",
+            is_low_confidence=bool(report_data.get("is_low_confidence", False)),
             methodology=report_data.get("methodology", ""),
             limitations=report_data.get("limitations", ""),
             doctor_assessment=report.doctor_notes or "",
+            original_image_url=scan_orig_url,
+            heatmap_url=scan_heatmap_url,
+            overlay_url=result_overlay_url,
+            task_type=result_task_type,
+            bounding_boxes=bboxes,
         ),
     )
 
@@ -145,18 +163,15 @@ async def regenerate_report(
         bboxes = json.loads(stored_result.bounding_boxes or "[]")
     except json.JSONDecodeError:
         bboxes = []
-    
-    result = SimpleNamespace(
-        top_label=stored_result.top_label,
-        confidence=float(stored_result.confidence) if stored_result.confidence is not None else 0.0,
-        severity=stored_result.severity,
-        all_scores=scores,
-        is_low_confidence=float(stored_result.confidence) < 0.50 if stored_result.confidence is not None else False,
-        heatmap_target_label=stored_result.top_label,
-        secondary_findings=sorted_secondary,
-        task_type=stored_result.task_type,
-        bounding_boxes=bboxes,
-    )
+
+    jeevansh_result = {
+        "task_type": stored_result.task_type,
+        "top_label": stored_result.top_label,
+        "confidence": float(stored_result.confidence) if stored_result.confidence is not None else 0.0,
+        "severity": stored_result.severity,
+        "all_scores": scores,
+        "detections": bboxes,
+    }
 
     image_path = scan.file_path
     if not os.path.isabs(image_path):
@@ -169,17 +184,27 @@ async def regenerate_report(
     try:
         with Image.open(image_path) as source:
             image = source.copy()
-        report_data = await request.app.state.report_engine.generate_report(
-            result=result,
+
+        # Phase 16 Orchestrated Report Generation
+        orchestrator = getattr(request.app.state, "orchestrator", None)
+        if orchestrator is None:
+            from services.ai_orchestrator import create_orchestrator
+            orchestrator = create_orchestrator(request.app.state)
+            request.app.state.orchestrator = orchestrator
+
+        pipeline_result = await orchestrator.run_report_pipeline(
+            jeevansh_result=jeevansh_result,
             scan_type=scan.scan_type,
             modality=scan.modality,
             image=image,
         )
+        report_data = pipeline_result.report_data
+
         crud.replace_report(
             db=db,
             scan_id=scan_id,
             report_data=report_data,
-            llm_provider=report_data.get("llm_provider", "template"),
+            llm_provider=pipeline_result.llm_provider,
         )
         logger.info("Clinical report regenerated for %s", scan_id[:8])
         return await get_report(scan_id=scan_id, db=db, current_user=current_user)
@@ -204,7 +229,7 @@ async def download_pdf(
 ):
     """
     Generate and download a PDF report.
-    
+
     Generated clinical sections are read-only; this endpoint exports the stored report.
     Returns PDF binary with Content-Disposition: attachment for auto-download.
     """
@@ -231,7 +256,13 @@ async def download_pdf(
     report_data["doctor_assessment"] = report.doctor_notes or ""
     report_data["is_final"] = bool(report.doctor_approved_at)
 
-    # Generate the stored report without client-side field overrides.
+    # Check if we have a cached Cloudinary PDF and no edits are requested in this call
+    # Note: pdf_request might contain new edits we want to apply to the PDF.
+    has_new_edits = False
+    if pdf_request and (pdf_request.edited_findings or pdf_request.edited_impression):
+        has_new_edits = True
+
+    # Generate the stored report with both Grad-CAM and original scan images
     pdf_generator = request.app.state.pdf_generator
 
     try:
@@ -243,16 +274,91 @@ async def download_pdf(
 
         # Resolve heatmap path for PDF embedding
         heatmap_path = os.path.join(settings.heatmaps_dir, f"{scan_id}.png")
+        downloaded = False
+        if not os.path.exists(heatmap_path):
+            cloud_url = scan.heatmap_url
+            if not cloud_url and getattr(scan, "result", None) and scan.result.overlay_url:
+                cloud_url = scan.result.overlay_url
+
+            if cloud_url and cloud_url.startswith("http"):
+                try:
+                    import requests
+                    resp = requests.get(cloud_url, timeout=10)
+                    if resp.status_code == 200:
+                        with open(heatmap_path, "wb") as temp_f:
+                            temp_f.write(resp.content)
+                        downloaded = True
+                except Exception as e:
+                    logger.error(f"Failed to download heatmap from Cloudinary: {e}")
+
         if not os.path.exists(heatmap_path):
             heatmap_path = ""
 
-        pdf_bytes = pdf_generator.generate_pdf(
-            report_data=report_data, scan_id=scan_id, heatmap_path=heatmap_path
-        )
+        # Resolve original scan path for PDF embedding
+        original_image_path = getattr(scan, "file_path", None)
+        if not original_image_path or not os.path.exists(original_image_path):
+            original_image_path = os.path.join(settings.uploads_dir, f"{scan_id}.png")
+
+        downloaded_orig = False
+        if not os.path.exists(original_image_path):
+            cloud_orig_url = getattr(scan, "original_image_url", None)
+            if cloud_orig_url and cloud_orig_url.startswith("http"):
+                try:
+                    import requests
+                    resp = requests.get(cloud_orig_url, timeout=10)
+                    if resp.status_code == 200:
+                        temp_orig = os.path.join(settings.uploads_dir, f"{scan_id}_orig.png")
+                        with open(temp_orig, "wb") as temp_f:
+                            temp_f.write(resp.content)
+                        original_image_path = temp_orig
+                        downloaded_orig = True
+                except Exception as e:
+                    logger.error(f"Failed to download original scan from Cloudinary: {e}")
+
+        if not os.path.exists(original_image_path):
+            original_image_path = ""
+
+        try:
+            pdf_bytes = pdf_generator.generate_pdf(
+                report_data=report_data,
+                scan_id=scan_id,
+                heatmap_path=heatmap_path,
+                original_image_path=original_image_path,
+            )
+        finally:
+            if downloaded and os.path.exists(heatmap_path):
+                try:
+                    os.remove(heatmap_path)
+                except Exception:
+                    pass
+            if downloaded_orig and os.path.exists(original_image_path):
+                try:
+                    os.remove(original_image_path)
+                except Exception:
+                    pass
 
         filename = f"MedRittAI_Report_{scan_id[:8]}.pdf"
 
         logger.info(f"PDF generated for scan {scan_id[:8]} ({len(pdf_bytes)} bytes)")
+
+        from services.cloudinary_storage import upload_report_pdf
+
+        temp_pdf_path = os.path.join(settings.DATA_DIR, f"temp_{scan_id}.pdf")
+        try:
+            with open(temp_pdf_path, "wb") as f:
+                f.write(pdf_bytes)
+
+            pdf_url, pdf_pub_id = upload_report_pdf(temp_pdf_path)
+
+            report.report_pdf_url = pdf_url
+            report.report_pdf_public_id = pdf_pub_id
+            db.commit()
+            logger.info(f"PDF uploaded to Cloudinary: {pdf_url}")
+        except Exception as e:
+            logger.error(f"Cloudinary PDF upload failed: {e}")
+        finally:
+            if os.path.exists(temp_pdf_path):
+                os.remove(temp_pdf_path)
 
         return Response(
             content=pdf_bytes,

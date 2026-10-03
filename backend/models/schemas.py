@@ -9,8 +9,37 @@ from datetime import date, datetime
 
 
 # ============================================================
-# AUTHENTICATION
+# AUTHENTICATION & SECURITY QUESTIONS
 # ============================================================
+
+class SecurityQuestionAnswer(BaseModel):
+    question_id: str
+    answer: str
+
+class SecurityQuestionSetupRequest(BaseModel):
+    questions: list[SecurityQuestionAnswer] = Field(..., min_length=1, max_length=8)
+
+class SecurityQuestionResponse(BaseModel):
+    question_id: str
+    question: str
+
+class ForgotPasswordIdentifyRequest(BaseModel):
+    identifier: str
+
+class ForgotPasswordVerifyRequest(BaseModel):
+    identifier: str
+    answers: list[SecurityQuestionAnswer]
+
+class ForgotPasswordVerifyResponse(BaseModel):
+    reset_token: str
+
+class ForgotPasswordResetRequest(BaseModel):
+    reset_token: str
+    new_password: str = Field(..., min_length=6, max_length=128)
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6, max_length=128)
 
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=50)
@@ -66,6 +95,33 @@ class DoctorResponse(UserSummary):
     department: Optional[DepartmentResponse] = None
 
 
+
+class LabTechCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9._-]+$")
+    password: str = Field(..., min_length=6, max_length=128)
+    full_name: str = Field(..., min_length=2, max_length=150)
+    email: str = Field(default="", max_length=150)
+    phone: str = Field(default="", max_length=20)
+
+class LabTechUpdate(BaseModel):
+    full_name: Optional[str] = Field(default=None, min_length=2, max_length=150)
+    email: Optional[str] = Field(default=None, max_length=150)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    is_active: Optional[bool] = None
+
+class PharmacyStaffCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9._-]+$")
+    password: str = Field(..., min_length=6, max_length=128)
+    full_name: str = Field(..., min_length=2, max_length=150)
+    email: str = Field(default="", max_length=150)
+    phone: str = Field(default="", max_length=20)
+
+class PharmacyStaffUpdate(BaseModel):
+    full_name: Optional[str] = Field(default=None, min_length=2, max_length=150)
+    email: Optional[str] = Field(default=None, max_length=150)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    is_active: Optional[bool] = None
+
 class DoctorCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9._-]+$")
     password: str = Field(..., min_length=6, max_length=128)
@@ -84,6 +140,7 @@ class DoctorUpdate(BaseModel):
     department_id: Optional[int] = None
     email: Optional[str] = Field(default=None, max_length=150)
     phone: Optional[str] = Field(default=None, max_length=20)
+    password: Optional[str] = Field(default=None, min_length=6, max_length=128)
     is_available: Optional[bool] = None
     availability_note: Optional[str] = Field(default=None, max_length=250)
     is_active: Optional[bool] = None
@@ -360,6 +417,7 @@ class LocalizationDetail(BaseModel):
 class AnalysisResponse(BaseModel):
     scan_id: str
     scan_type: str
+    original_image_url: Optional[str] = None
     task_type: Optional[str] = None
     model_id: Optional[str] = None
     status: str
@@ -392,11 +450,16 @@ class ReportData(BaseModel):
     severity: Optional[str] = None
     disclaimer: str
     generated_at: str
-    heatmap_target_label: str = ""
+    heatmap_target_label: Optional[str] = ""
     is_low_confidence: bool = False
     methodology: str = ""
     limitations: str = ""
     doctor_assessment: str = ""
+    original_image_url: Optional[str] = None
+    heatmap_url: Optional[str] = None
+    overlay_url: Optional[str] = None
+    task_type: Optional[str] = None
+    bounding_boxes: list[dict] = Field(default_factory=list)
 
 
 class ReportResponse(BaseModel):
@@ -408,7 +471,8 @@ class PDFRequest(BaseModel):
     """Reserved request body; generated report sections are read-only."""
 
     model_config = ConfigDict(extra="forbid")
-
+    edited_findings: Optional[str] = None
+    edited_impression: Optional[str] = None
 
 class PatientSummaryRequest(BaseModel):
     language: str = Field(default="English", min_length=2, max_length=30)
@@ -428,6 +492,7 @@ class PatientSummaryResponse(BaseModel):
 class HistoryScan(BaseModel):
     scan_id: str
     filename: str
+    original_image_url: Optional[str] = None
     scan_type: str
     top_label: Optional[str] = None
     confidence: Optional[float] = None
@@ -464,3 +529,48 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     version: str
     models: dict[str, str]
+
+
+# ============================================================
+# DOCTOR REPORT INDEX
+# ============================================================
+
+class ReportSummaryPatient(BaseModel):
+    id: int
+    username: str
+    full_name: str
+    email: str = ""
+    phone: str = ""
+
+
+class DetectionSummary(BaseModel):
+    count: int
+    classes: list[str] = Field(default_factory=list)
+
+
+class ReportSummary(BaseModel):
+    report_id: int
+    scan_id: str
+    patient: ReportSummaryPatient
+    scan_type: str
+    modality: str
+    task_type: Optional[str] = None
+    tested_at: Optional[datetime] = None
+    test_date: Optional[str] = None
+    test_time: Optional[str] = None
+    scan_status: str
+    report_status: str
+    top_label: Optional[str] = None
+    confidence: Optional[float] = None
+    severity: Optional[str] = None
+    detection: Optional[DetectionSummary] = None
+    generated_at: Optional[datetime] = None
+    doctor_approved: bool
+    doctor_approved_at: Optional[datetime] = None
+    reviewed_by_doctor_id: Optional[int] = None
+    forwarded_to_me: bool = False
+
+
+class DoctorReportIndexResponse(BaseModel):
+    reports: list[ReportSummary]
+    total: int

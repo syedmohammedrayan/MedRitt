@@ -10,25 +10,23 @@ services:
       - ./models:/app/models:ro
 
       - medrittai-data:/app/data
-    environment:
-      - SECRET_KEY=${SECRET_KEY:-medrittai-hackathon-secret}
+      - SECRET_KEY=${SECRET_KEY:-}
       - DATA_DIR=/app/data
-
-      - MAIRA_API_URL=${MAIRA_API_URL:-https://grass-quiet-icy.ngrok-free.dev}
-      - MAIRA_TIMEOUT_SECONDS=${MAIRA_TIMEOUT_SECONDS:-120}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/medritt.db}
+      - CLOUDINARY_ENABLED=${CLOUDINARY_ENABLED:-true}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
+      - CLOUDINARY_FOLDER=${CLOUDINARY_FOLDER:-medritt}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3-flash-preview}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - SARVAM_API_KEY=${SARVAM_API_KEY:-}
-      - SARVAM_TRANSLATE_MODEL=${SARVAM_TRANSLATE_MODEL:-sarvam-translate:v1}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - NVIDIA_ENABLED=${NVIDIA_ENABLED:-true}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      - NVIDIA_MODEL=${NVIDIA_MODEL:-meta/llama-3.3-70b-instruct}
       - STRICT_SCAN_TYPE_VALIDATION=${STRICT_SCAN_TYPE_VALIDATION:-true}
-      - SCAN_TYPE_VERIFIER_MODEL=${SCAN_TYPE_VERIFIER_MODEL:-}
-      - SCAN_TYPE_GROQ_MODEL=${SCAN_TYPE_GROQ_MODEL:-qwen/qwen3.6-27b}
       - SCAN_TYPE_MIN_CONFIDENCE=${SCAN_TYPE_MIN_CONFIDENCE:-0.85}
-      - DEMO_USER=${DEMO_USER:-demo}
-      - DEMO_PASSWORD=${DEMO_PASSWORD:-demo123}
       - LOG_LEVEL=info
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

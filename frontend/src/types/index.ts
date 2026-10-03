@@ -281,6 +281,7 @@ export interface BoundingBox {
 export interface AnalysisResponse {
   scan_id: string;
   scan_type: ScanType;
+  original_image_url?: string | null;
   task_type?: 'classification' | 'detection';
   model_id?: string;
   status: string;
@@ -323,6 +324,11 @@ export interface ReportData {
   methodology?: string;
   limitations?: string;
   doctor_assessment: string;
+  original_image_url?: string | null;
+  heatmap_url?: string | null;
+  overlay_url?: string | null;
+  task_type?: string;
+  bounding_boxes?: Array<{ x1: number; y1: number; x2: number; y2: number; class: string; confidence: number }>;
 }
 
 export interface ReportResponse {
@@ -347,6 +353,7 @@ export const PATIENT_LANGUAGES = [
 export interface HistoryScan {
   scan_id: string;
   filename: string;
+  original_image_url?: string;
   scan_type: ScanType;
   status: string;
   top_label: string | null;
@@ -364,4 +371,83 @@ export interface HistoryResponse {
 export interface DeleteScansResponse {
   deleted: number;
   scan_ids: string[];
+}
+
+// ---- Doctor report index ----
+export type DoctorReportStatus = 'reviewed' | 'pending_review';
+
+export interface DoctorReportPatient {
+  id: number;
+  username: string;
+  full_name: string;
+  email: string;
+  phone: string;
+}
+
+export interface DoctorReportDetection {
+  count: number;
+  classes: string[];
+}
+
+export interface DoctorReportSummary {
+  report_id: number;
+  scan_id: string;
+  patient: DoctorReportPatient;
+  scan_type: string;
+  modality: string;
+  task_type: 'classification' | 'detection' | null;
+  tested_at: string | null;
+  test_date: string | null;
+  test_time: string | null;
+  scan_status: string;
+  report_status: DoctorReportStatus;
+  top_label: string | null;
+  confidence: number | null;
+  severity: string | null;
+  detection: DoctorReportDetection | null;
+  generated_at: string | null;
+  doctor_approved: boolean;
+  doctor_approved_at: string | null;
+  reviewed_by_doctor_id: number | null;
+  forwarded_to_me: boolean;
+}
+
+export interface DoctorReportIndexResponse {
+  reports: DoctorReportSummary[];
+  total: number;
+}
+
+export interface DoctorReportQuery {
+  search?: string;
+  scan_type?: string;
+  status?: DoctorReportStatus;
+  sort?: 'newest' | 'oldest';
+}
+
+/* ── Security Questions & Forgot Password ── */
+export interface SecurityQuestion {
+  question_id: string;
+  question: string;
+}
+
+export interface SecurityQuestionSetupRequest {
+  questions: Array<{ question_id: string; answer: string }>;
+}
+
+export interface ForgotPasswordIdentifyRequest {
+  identifier: string;
+}
+
+export interface ForgotPasswordVerifyRequest {
+  identifier: string;
+  answers: Array<{ question_id: string; answer: string }>;
+}
+
+export interface ForgotPasswordVerifyResponse {
+  reset_token: string;
+}
+
+export interface ForgotPasswordResetRequest {
+  reset_token: string;
+  new_password: string;
 }

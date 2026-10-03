@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import BrandLogo from '../components/BrandLogo';
+import ForgotPasswordModal from '../components/ForgotPasswordModal';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const { isAuthenticated, login, user } = useAuth();
   const navigate = useNavigate();
 
@@ -78,14 +81,28 @@ export default function LoginPage() {
               />
             </label>
             <label>
-              <span>Password</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Your password"
-                autoComplete="current-password"
-              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Password</span>
+                <button type="button" onClick={() => setShowForgotPassword(true)} style={{ fontSize: '13px', color: 'var(--brand-primary)', textDecoration: 'none', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Forgot Password?</button>
+              </div>
+              <div className="password-input-wrapper" style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Your password"
+                  autoComplete="current-password"
+                  style={{ width: '100%', paddingRight: '40px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? "👁️" : "👁️‍🗨️"}
+                </button>
+              </div>
             </label>
 
             {error && <div className="form-error" role="alert">{error}</div>}
@@ -95,18 +112,17 @@ export default function LoginPage() {
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
             </button>
           </form>
-
-          <div className="demo-credentials">
-            <span><small>Patient</small><code>patient / patient123</code></span>
-            <span><small>Doctor</small><code>dr.sharma / doctor123</code></span>
-            <span><small>Lab</small><code>lab.tech / lab123</code></span>
-            <span><small>Pharmacy</small><code>pharmacy / pharmacy123</code></span>
-            <span><small>Admin</small><code>admin / admin123</code></span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', fontSize: '0.875rem' }}>
+            <p className="auth-switch" style={{ margin: 0 }}>New patient? <Link to="/register">Create an account</Link></p>
+            <button type="button" onClick={() => setShowForgotPassword(true)} style={{ color: 'var(--brand-600)', textDecoration: 'none', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 'inherit' }}>Forgot password?</button>
           </div>
-          <p className="auth-switch">New patient? <a href="/register">Create an account</a></p>
         </div>
         <p className="login-footer">MedRittAI Clinical Workspace · {new Date().getFullYear()}</p>
       </section>
+
+      {showForgotPassword && (
+        <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />
+      )}
     </div>
   );
 }

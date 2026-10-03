@@ -31,7 +31,7 @@ class Department(Base):
 
 
 class User(Base):
-    """Authentication table with role-based access. Seeded with demo users on first run."""
+    """Authentication table with role-based access."""
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -45,6 +45,7 @@ class User(Base):
     qualification = Column(String(150), default="")  # e.g., "MBBS, MD (Medicine)"
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
     avatar_url = Column(String(500), default="")
+    avatar_public_id = Column(String(200), nullable=True)
     is_active = Column(Boolean, default=True)
     is_available = Column(Boolean, default=True)
     availability_note = Column(String(250), default="")
@@ -83,6 +84,26 @@ class User(Base):
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', role='{self.role}')>"
+
+
+class UserSecurityQuestion(Base):
+    """Stores bcrypt-hashed answers to security questions for personnel password recovery."""
+    __tablename__ = "user_security_questions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "question_id", name="uq_user_question"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(String(50), nullable=False)
+    answer_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", backref="security_questions")
+
+    def __repr__(self):
+        return f"<UserSecurityQuestion(user_id={self.user_id}, question_id='{self.question_id}')>"
 
 
 class Appointment(Base):
@@ -157,6 +178,10 @@ class Scan(Base):
     file_path = Column(String(500), nullable=False)  # /data/uploads/{id}.png
     heatmap_path = Column(String(500))  # /data/heatmaps/{id}.png (NULL until analyzed)
     thumbnail_path = Column(String(500))  # /data/thumbnails/{id}.png
+    original_image_url = Column(String(500), nullable=True)
+    original_image_public_id = Column(String(100), nullable=True)
+    heatmap_url = Column(String(500), nullable=True)
+    heatmap_public_id = Column(String(100), nullable=True)
     file_size_bytes = Column(Integer)
     status = Column(String(20), default="uploaded")  # uploaded, analyzing, analyzed, failed
     uploaded_at = Column(DateTime, server_default=func.now())
@@ -181,24 +206,26 @@ class Result(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     scan_id = Column(String(36), ForeignKey("scans.id"), unique=True, nullable=False)
-    
+
     # New Phase 4 fields
     task_type = Column(String(50), nullable=True)  # classification, detection
     model_id = Column(String(50), nullable=True)
-    
+
     # Classification fields (now nullable for detection)
     top_label = Column(String(100), nullable=True)
     confidence = Column(Float, nullable=True)
     severity = Column(String(20), nullable=True)
     all_scores = Column(Text, nullable=True)
-    
+
     # Localization / Detection fields
     localization_type = Column(String(20), default="heatmap")
     bounding_boxes = Column(Text, nullable=True)
     image_width = Column(Integer, nullable=True)
     image_height = Column(Integer, nullable=True)
     overlay_path = Column(String(500), nullable=True)
-    
+    overlay_url = Column(String(500), nullable=True)
+    overlay_public_id = Column(String(100), nullable=True)
+
     analysis_time_ms = Column(Integer)
     analyzed_at = Column(DateTime, server_default=func.now())
 
@@ -215,12 +242,14 @@ class Report(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     scan_id = Column(String(36), ForeignKey("scans.id"), unique=True, nullable=False)
-    patient_id = Column(String(50), default="DEMO-001")  # Placeholder for demo
+    patient_id = Column(String(50), nullable=True)
     llm_provider = Column(String(20), default="template")  # groq, claude, openai, template
     report_json = Column(Text, nullable=False)  # Full structured report as JSON
     edited_findings = Column(Text)  # Clinician-edited findings (NULL until edited)
     edited_impression = Column(Text)  # Clinician-edited impression (NULL until edited)
     generated_at = Column(DateTime, server_default=func.now())
+    report_pdf_url = Column(String(500), nullable=True)
+    report_pdf_public_id = Column(String(100), nullable=True)
 
     # Doctor review fields
     reviewed_by_doctor_id = Column(Integer, ForeignKey("users.id"), nullable=True)

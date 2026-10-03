@@ -826,6 +826,17 @@ h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -.01
 .patient-heatmap-card figure { margin: 0; }
 .patient-heatmap-card img { width: 100%; height: 480px; object-fit: contain; background: #090b0c; }
 .patient-heatmap-card figcaption { padding: 11px 15px; color: #aeb6b9; font-size: 11px; line-height: 1.5; }
+.patient-dual-scans { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px; background: #0c0f11; }
+.patient-scan-panel { display: flex; flex-direction: column; margin: 0; border: 1px solid #30373a; border-radius: 9px; overflow: hidden; background: #171c1f; }
+.patient-scan-panel__heading { display: flex; flex-direction: column; padding: 9px 13px; background: #1d2327; border-bottom: 1px solid #30373a; }
+.patient-scan-panel__heading span { color: #0ea5e9; font-family: var(--mono); font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+.patient-scan-panel__heading strong { color: #fff; font-size: 13px; margin-top: 2px; }
+.patient-scan-panel img { width: 100%; height: 380px; object-fit: contain; background: #090b0c; }
+.patient-scan-panel figcaption { padding: 10px 14px; color: #aeb6b9; font-size: 11px; line-height: 1.45; border-top: 1px solid #282f33; background: #14181a; }
+@media (max-width: 900px) {
+  .patient-dual-scans { grid-template-columns: 1fr; }
+  .patient-scan-panel img { height: 280px; }
+}
 .patient-conclusion-stack { display: grid; align-content: start; gap: 12px; }
 .patient-conclusion-card { padding: 19px; border: 1px solid var(--line); border-radius: 12px; background: #fbfbf8; }
 .patient-conclusion-card > span,.patient-full-record__grid article > span { color: var(--teal-deep); font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
@@ -1146,4 +1157,21 @@ h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -.01
   .patient-paper { display: block; min-height: 0; padding: 20mm; }
   .medicine-bill-page { width: 100%; max-width: none; padding: 0; }
   .medicine-invoice { border: 0; box-shadow: none; }
+}
+
+/* ---- Doctor reports workspace ---- */
+.doctor-reports-toolbar { display: grid; grid-template-columns: minmax(240px, 2fr) repeat(3, minmax(150px, 1fr)); align-items: end; gap: 14px; margin-bottom: 18px; }
+.doctor-reports-search input { font-size: 15px; }
+.doctor-reports-groups { display: grid; gap: 18px; }
+.doctor-report-group > header { margin-bottom: 4px; }
+.doctor-report-group__meta { display: block; margin-top: 4px; color: var(--ink-soft); font-size: 12.5px; }
+.doctor-report-timeline { margin: 0; padding: 0; list-style: none; }
+.doctor-report-row p { white-space: normal; }
+.doctor-report-row__pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.doctor-report-row__action { white-space: nowrap; text-decoration: none; }
+@media (max-width: 860px) {
+  .doctor-reports-toolbar { grid-template-columns: 1fr 1fr; }
+  .doctor-reports-search { grid-column: 1 / -1; }
+  .doctor-report-row { grid-template-columns: auto minmax(0, 1fr); }
+  .doctor-report-row__action { grid-column: 2; justify-self: start; }
 }

@@ -61,6 +61,11 @@ export default function ResultsPage() {
               setAnalysis({
                 scan_id: scanId,
                 scan_type: nextReport.scan_type as AnalysisResponse['scan_type'],
+                original_image_url: nextReport.original_image_url || `/static/uploads/${scanId}.png`,
+                task_type: (nextReport.task_type === 'detection' || nextReport.task_type === 'classification')
+                  ? nextReport.task_type
+                  : (['brain_tumor', 'bone_fracture'].includes(nextReport.scan_type) ? 'detection' : 'classification'),
+                model_id: nextReport.scan_type,
                 status: 'analyzed',
                 classification: {
                   top_label: nextReport.top_label || 'Unknown',
@@ -69,14 +74,24 @@ export default function ResultsPage() {
                   all_scores: nextReport.all_scores || {},
                 },
                 localization: {
-                  type: 'heatmap',
-                  heatmap_url: null,
-                  overlay_url: null,
-                  bounding_boxes: [],
+                  type: (nextReport.task_type === 'detection' || ['brain_tumor', 'bone_fracture'].includes(nextReport.scan_type)) ? 'boxes' : 'heatmap',
+                  heatmap_url: nextReport.heatmap_url || null,
+                  overlay_url: nextReport.overlay_url || nextReport.heatmap_url || null,
+                  bounding_boxes: (nextReport.bounding_boxes as any) || [],
                 },
                 analysis_time_ms: 0,
                 analyzed_at: nextReport.generated_at,
               });
+            } else if (nextReport.original_image_url || nextReport.overlay_url) {
+              setAnalysis(prev => prev ? {
+                ...prev,
+                original_image_url: prev.original_image_url || nextReport.original_image_url || null,
+                localization: {
+                  ...prev.localization,
+                  overlay_url: prev.localization.overlay_url || nextReport.overlay_url || null,
+                  heatmap_url: prev.localization.heatmap_url || nextReport.heatmap_url || null,
+                }
+              } : prev);
             }
             return;
           } catch (requestError: any) {
@@ -108,6 +123,21 @@ export default function ResultsPage() {
     };
   }, [scanId, user?.role]);
 
+  const rawScanImageUrl = analysis?.original_image_url || report?.original_image_url;
+  const currentScanImageUrl = rawScanImageUrl
+    ? apiAssetUrl(rawScanImageUrl)
+    : (scanId ? apiAssetUrl(`/static/uploads/${scanId}.png`) : '');
+
+  const rawOverlayUrl = analysis?.localization?.overlay_url || report?.overlay_url;
+  const rawHeatmapUrl = analysis?.localization?.heatmap_url || report?.heatmap_url;
+  const currentOverlayUrl = rawOverlayUrl
+    ? apiAssetUrl(rawOverlayUrl)
+    : (rawHeatmapUrl ? apiAssetUrl(rawHeatmapUrl) : null);
+
+  const currentHeatmapUrl = rawHeatmapUrl
+    ? apiAssetUrl(rawHeatmapUrl)
+    : null;
+
   if (loading) {
     return (
       <div className="workspace-page results-loading" aria-label="Loading report">
@@ -117,12 +147,12 @@ export default function ResultsPage() {
         {analysis ? (
           <div className="result-grid">
             <ScanViewer
-              scanImageUrl={apiAssetUrl(`/static/uploads/${scanId}.png`)}
-              heatmapUrl={analysis.localization.heatmap_url ? apiAssetUrl(analysis.localization.heatmap_url) : null}
-              overlayUrl={analysis.localization.overlay_url ? apiAssetUrl(analysis.localization.overlay_url) : null}
+              scanImageUrl={currentScanImageUrl}
+              heatmapUrl={currentHeatmapUrl}
+              overlayUrl={currentOverlayUrl}
               scanType={analysis.scan_type}
               taskType={analysis.task_type}
-              heatmapTargetLabel={analysis.classification.heatmap_target_label}
+              heatmapTargetLabel={analysis.classification?.heatmap_target_label}
             />
             <ResultPanel
               classification={analysis.classification}
@@ -192,17 +222,17 @@ export default function ResultsPage() {
       </div>}
 
       {user?.role === 'patient' ? (
-        <PatientFinalReport scanId={scanId} report={report} heatmapUrl={analysis.localization.heatmap_url ? apiAssetUrl(analysis.localization.heatmap_url) : null} overlayUrl={analysis.localization.overlay_url ? apiAssetUrl(analysis.localization.overlay_url) : null} originalImageUrl={apiAssetUrl(`/static/uploads/${scanId}.png`)} />
+        <PatientFinalReport scanId={scanId} report={report} heatmapUrl={currentHeatmapUrl} overlayUrl={currentOverlayUrl} originalImageUrl={currentScanImageUrl} />
       ) : tab === 'doctor' ? (
         <div className="doctor-report-layout" role="tabpanel">
           <div className="result-grid">
             <ScanViewer
-              scanImageUrl={apiAssetUrl(`/static/uploads/${scanId}.png`)}
-              heatmapUrl={analysis.localization.heatmap_url ? apiAssetUrl(analysis.localization.heatmap_url) : null}
-              overlayUrl={analysis.localization.overlay_url ? apiAssetUrl(analysis.localization.overlay_url) : null}
+              scanImageUrl={currentScanImageUrl}
+              heatmapUrl={currentHeatmapUrl}
+              overlayUrl={currentOverlayUrl}
               scanType={analysis.scan_type}
               taskType={analysis.task_type}
-              heatmapTargetLabel={report.heatmap_target_label || analysis.classification.heatmap_target_label}
+              heatmapTargetLabel={report.heatmap_target_label || analysis.classification?.heatmap_target_label}
             />
             <ResultPanel
               classification={analysis.classification}

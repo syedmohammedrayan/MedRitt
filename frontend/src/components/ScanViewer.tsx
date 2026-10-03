@@ -12,8 +12,8 @@ interface ScanViewerProps {
 type ViewMode = 'original' | 'overlay' | 'compare';
 
 export default function ScanViewer({ scanImageUrl, heatmapUrl, overlayUrl, scanType, taskType = 'classification', heatmapTargetLabel }: ScanViewerProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('overlay');
-  
+  const [viewMode, setViewMode] = useState<ViewMode>('compare');
+
   const scanLabel = ({
     chest_xray: 'Chest X-ray',
     brain_mri: 'Brain MRI',
@@ -24,12 +24,15 @@ export default function ScanViewer({ scanImageUrl, heatmapUrl, overlayUrl, scanT
     brain_tumor: 'Brain MRI',
     bone_fracture: 'Bone X-ray'
   } as Record<string, string>)[scanType] || 'Diagnostic image';
-  
+
   const isDetection = taskType === 'detection';
-  const attributionLabel = isDetection ? 'Detection overlay' : (scanType === 'chest_xray' ? 'RAD-DINO attribution' : 'Model heatmap');
+  const attributionLabel = isDetection ? 'Detection overlay' : (scanType === 'chest_xray' ? 'RAD-DINO attribution' : 'Grad-CAM heatmap');
   const activeOverlayUrl = isDetection ? overlayUrl : heatmapUrl;
 
   const validOverlay = activeOverlayUrl ? activeOverlayUrl : scanImageUrl;
+
+  const [overlayLoadFailed, setOverlayLoadFailed] = useState(false);
+  const displayOverlay = !overlayLoadFailed && validOverlay ? validOverlay : scanImageUrl;
 
   return (
     <section className="scan-viewer">
@@ -39,9 +42,9 @@ export default function ScanViewer({ scanImageUrl, heatmapUrl, overlayUrl, scanT
           <h2>{scanLabel}</h2>
         </div>
         <div className="viewer-toggle" role="group" aria-label="Image display mode">
-          {(['original', 'overlay', 'compare'] as ViewMode[]).map((mode) => (
+          {(['compare', 'overlay', 'original'] as ViewMode[]).map((mode) => (
             <button key={mode} className={viewMode === mode ? 'active' : ''} onClick={() => setViewMode(mode)}>
-              {mode === 'overlay' ? attributionLabel : mode[0].toUpperCase() + mode.slice(1)}
+              {mode === 'compare' ? 'Dual view' : mode === 'overlay' ? attributionLabel : 'Original'}
             </button>
           ))}
         </div>
@@ -50,14 +53,32 @@ export default function ScanViewer({ scanImageUrl, heatmapUrl, overlayUrl, scanT
       <div className={`scan-canvas scan-canvas--${viewMode}`}>
         {viewMode === 'compare' ? (
           <>
-            <figure><img src={scanImageUrl} alt={`Original ${scanLabel}`} /><figcaption>Original</figcaption></figure>
-            <figure><img src={validOverlay} alt={`${scanLabel} ${attributionLabel}`} /><figcaption>{attributionLabel}</figcaption></figure>
+            {/* Left side: Grad-CAM / Attribution overlay */}
+            <figure>
+              <img
+                src={displayOverlay}
+                alt={`${scanLabel} ${attributionLabel}`}
+                onError={() => setOverlayLoadFailed(true)}
+              />
+              <figcaption>{attributionLabel} (Left)</figcaption>
+            </figure>
+            {/* Right side: Original scan */}
+            <figure>
+              <img
+                src={scanImageUrl}
+                alt={`Original ${scanLabel}`}
+              />
+              <figcaption>Original Scan (Right)</figcaption>
+            </figure>
           </>
         ) : (
           <figure>
             <img
-              src={viewMode === 'original' ? scanImageUrl : validOverlay}
+              src={viewMode === 'original' ? scanImageUrl : displayOverlay}
               alt={viewMode === 'original' ? `Original ${scanLabel}` : `${scanLabel} ${attributionLabel}`}
+              onError={() => {
+                if (viewMode !== 'original') setOverlayLoadFailed(true);
+              }}
             />
           </figure>
         )}

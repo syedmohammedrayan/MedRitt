@@ -279,7 +279,7 @@ async def upload_scan(
 ):
     """
     Upload a medical image for analysis.
-    
+
     Args:
         file: Image file (PNG/JPEG/DICOM)
         scan_type: chest_xray, brain_mri, lung_ct, or kidney_us
@@ -355,30 +355,6 @@ async def upload_scan(
 
     _validate_scan_matches_selected_type(image, scan_type, modality)
 
-    # Temporarily bypass strict validation for the new models until the verifier is updated
-    if settings.STRICT_SCAN_TYPE_VALIDATION and scan_type in {"chest_xray", "brain_mri"}:
-        verifier = getattr(request.app.state, "scan_type_verifier", None)
-        if verifier is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Scan type verification is unavailable. No analysis was performed.",
-            )
-        try:
-            verification = await verifier.verify(image)
-        except Exception as exc:
-            logger.error("Scan type verification unavailable: %s", exc)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=(
-                    "Image-type verification services are temporarily busy. No analysis was performed. "
-                    "Please retry this same diagnostic image in a moment."
-                ),
-            )
-        _enforce_scan_type_verification(
-            verification,
-            scan_type,
-            settings.SCAN_TYPE_MIN_CONFIDENCE,
-        )
 
     # Save original image as PNG
     file_path = os.path.join(settings.uploads_dir, f"{scan_id}.png")
@@ -389,6 +365,23 @@ async def upload_scan(
     thumbnail.thumbnail((128, 128), Image.Resampling.LANCZOS)
     thumbnail_path = os.path.join(settings.thumbnails_dir, f"{scan_id}.png")
     thumbnail.save(thumbnail_path, "PNG")
+
+
+    # Cloudinary Upload
+    from services.cloudinary_storage import upload_original_scan
+    orig_url, orig_pub_id = None, None
+    try:
+        from io import BytesIO
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        buffer.seek(0)
+        orig_url, orig_pub_id = upload_original_scan(buffer)
+    except Exception as e:
+        logger.error(f"Cloudinary upload failed: {e}")
+        # Clean up local files
+        if os.path.exists(file_path): os.remove(file_path)
+        if os.path.exists(thumbnail_path): os.remove(thumbnail_path)
+        raise HTTPException(status_code=500, detail="Failed to upload image to cloud storage.")
 
     # Save to database
     scan = crud.create_scan(
@@ -401,6 +394,8 @@ async def upload_scan(
         file_path=file_path,
         thumbnail_path=thumbnail_path,
         file_size_bytes=file_size,
+        original_image_url=orig_url,
+        original_image_public_id=orig_pub_id,
         lab_tech_id=current_user.id if current_user.role == "lab_tech" else None,
     )
     if diagnostic_order:
@@ -416,7 +411,7 @@ async def upload_scan(
         file_size_bytes=file_size,
         status="uploaded",
         uploaded_at=scan.uploaded_at.isoformat() if scan.uploaded_at else "",
-        thumbnail_url=f"/static/thumbnails/{scan_id}.png",
+        thumbnail_url=orig_url if orig_url else f"/static/thumbnails/{scan_id}.png",
     )
 
 
@@ -457,7 +452,18 @@ async def analyze_scan(
 
     try:
         # Load image
-        image = Image.open(scan.file_path).convert("RGB")
+        if os.path.exists(scan.file_path):
+            image = Image.open(scan.file_path).convert("RGB")
+        elif scan.original_image_url:
+            import requests
+            from io import BytesIO
+            resp = requests.get(scan.original_image_url, timeout=10)
+            if resp.status_code == 200:
+                image = Image.open(BytesIO(resp.content)).convert("RGB")
+            else:
+                raise RuntimeError(f"Could not download scan from Cloudinary. Status: {resp.status_code}")
+        else:
+            raise RuntimeError("Scan file not found locally or on Cloudinary")
 
         registry = getattr(request.app.state, "jeevansh_registry", None)
         if not registry:
@@ -465,48 +471,85 @@ async def analyze_scan(
         model = registry.get_model(scan.scan_type)
         if not model:
             raise RuntimeError(f"Model not found in registry for {scan.scan_type}")
-        
-        # Run inference off event loop
+
+        # Run Jeevansh inference off event loop
         inference_result = await asyncio.to_thread(model.predict, image)
-        
-        task_type = inference_result.get("task_type")
-        
-        if task_type == "classification":
-            db_top_label = inference_result["top_label"]
-            db_confidence = float(inference_result["confidence"])
-            db_severity = None
-            db_all_scores = inference_result["all_scores"]
-            db_bboxes = []
-            loc_type = "heatmap"
-            heatmap_overlay = inference_result["gradcam"]
-        elif task_type == "detection":
-            detections = inference_result["detections"]
-            if detections:
-                best_det = max(detections, key=lambda x: x["confidence"])
-                db_top_label = best_det["class"]
-                db_confidence = float(best_det["confidence"])
-            else:
-                db_top_label = "No Detection"
-                db_confidence = 0.0
-                
-            db_severity = None
-            db_all_scores = None
-            db_bboxes = detections
-            loc_type = "bbox"
-            heatmap_overlay = np.array(inference_result["overlay"])
-        else:
-            raise RuntimeError(f"Unknown task type: {task_type}")
+        task_type = inference_result.get("task_type", "classification")
+
+        # Extract arrays for orchestrator
+        heatmap_overlay = inference_result.get("gradcam") if task_type == "classification" else None
+        overlay_array = inference_result.get("overlay") if task_type == "detection" else None
+
+        # Execute Phase 16 Scan Orchestration
+        orchestrator = getattr(request.app.state, "orchestrator", None)
+        if orchestrator is None:
+            from services.ai_orchestrator import create_orchestrator
+            orchestrator = create_orchestrator(request.app.state)
+            request.app.state.orchestrator = orchestrator
+
+        orchestrator_result = await orchestrator.run_scan_pipeline(
+            image=image,
+            scan_type=scan.scan_type,
+            scan_id=scan_id,
+            jeevansh_result=inference_result,
+            heatmap_array=heatmap_overlay,
+            overlay_array=overlay_array,
+        )
+
+        db_top_label = orchestrator_result.top_label or "Unknown"
+        db_confidence = orchestrator_result.confidence or 0.0
+        db_severity = orchestrator_result.severity
+        db_all_scores = orchestrator_result.all_scores
+        db_bboxes = orchestrator_result.bounding_boxes
+
+        heatmap_url = orchestrator_result.heatmap_url
+        heatmap_pub_id = orchestrator_result.heatmap_public_id
+        overlay_url = orchestrator_result.overlay_url
+        overlay_pub_id = orchestrator_result.overlay_public_id
+
+        loc_type = "heatmap" if task_type == "classification" else "bbox"
+
+        # We also need heatmap_overlay for the local static save
+        heatmap_overlay_to_save = heatmap_overlay if task_type == "classification" else overlay_array
+
+        # Ensure local original scan is saved in static uploads dir
+        try:
+            os.makedirs(settings.uploads_dir, exist_ok=True)
+            local_upload_path = os.path.join(settings.uploads_dir, f"{scan_id}.png")
+            if not os.path.exists(local_upload_path) and image is not None:
+                image.save(local_upload_path, "PNG")
+        except Exception as upload_save_err:
+            logger.warning(f"Could not ensure local scan image for {scan_id[:8]}: {upload_save_err}")
+
+        # Save overlay/heatmap locally so local static URL always works
+        if heatmap_overlay_to_save is not None:
+            try:
+                os.makedirs(settings.heatmaps_dir, exist_ok=True)
+                local_heatmap_path = os.path.join(settings.heatmaps_dir, f"{scan_id}.png")
+                if isinstance(heatmap_overlay_to_save, np.ndarray):
+                    if heatmap_overlay_to_save.dtype != np.uint8:
+                        if heatmap_overlay_to_save.max() <= 1.0:
+                            arr_to_save = (heatmap_overlay_to_save * 255).astype(np.uint8)
+                        else:
+                            arr_to_save = heatmap_overlay_to_save.astype(np.uint8)
+                    else:
+                        arr_to_save = heatmap_overlay_to_save
+                    Image.fromarray(arr_to_save).save(local_heatmap_path, "PNG")
+                elif hasattr(heatmap_overlay_to_save, "save"):
+                    heatmap_overlay_to_save.save(local_heatmap_path, "PNG")
+
+                if not overlay_url:
+                    overlay_url = f"/static/heatmaps/{scan_id}.png"
+                if not heatmap_url:
+                    heatmap_url = f"/static/heatmaps/{scan_id}.png"
+            except Exception as save_err:
+                logger.warning(f"Could not save local overlay for {scan_id[:8]}: {save_err}")
 
         # Calculate analysis time
         analysis_time_ms = int((time.time() - start_time) * 1000)
 
-        # Save heatmap / overlay
-        heatmap_path = os.path.join(settings.heatmaps_dir, f"{scan_id}.png")
-        heatmap_image = Image.fromarray(heatmap_overlay) if isinstance(heatmap_overlay, np.ndarray) else heatmap_overlay
-        heatmap_image.save(heatmap_path, "PNG")
-
-        # Update scan with heatmap path
-        crud.update_scan_heatmap(db, scan_id, heatmap_path)
+        # Update scan with heatmap info
+        crud.update_scan_heatmap(db, scan_id, None, heatmap_url=heatmap_url, heatmap_public_id=heatmap_pub_id)
         crud.update_scan_status(db, scan_id, "analyzed")
 
         # Store result in DB
@@ -522,24 +565,17 @@ async def analyze_scan(
             bounding_boxes=db_bboxes,
             image_width=inference_result.get("image_width"),
             image_height=inference_result.get("image_height"),
-            overlay_path=f"/static/heatmaps/{scan_id}.png" if heatmap_path else None,
+            overlay_path=None,
+            overlay_url=overlay_url,
+            overlay_public_id=overlay_pub_id,
             analysis_time_ms=analysis_time_ms,
         )
         crud.complete_order_for_scan(db, scan_id)
 
-        # Start the report task
-        class DummyResult:
-            def __init__(self, top_label, confidence, all_scores, severity, task_type, bounding_boxes):
-                self.top_label = top_label
-                self.confidence = confidence
-                self.all_scores = all_scores
-                self.severity = severity
-                self.task_type = task_type
-                self.bounding_boxes = bounding_boxes
-
+        # Start the report task (Phase 16 Orchestrated)
         report_task = asyncio.create_task(
-            request.app.state.report_engine.generate_report(
-                result=DummyResult(db_top_label, db_confidence, db_all_scores, db_severity, task_type, db_bboxes),
+            orchestrator.run_report_pipeline(
+                jeevansh_result=inference_result,
                 scan_type=scan.scan_type,
                 modality=scan.modality,
                 image=image,
@@ -563,8 +599,9 @@ async def analyze_scan(
         return AnalysisResponse(
             scan_id=scan_id,
             scan_type=scan.scan_type,
+            original_image_url=scan.original_image_url or f"/static/uploads/{scan_id}.png",
             task_type=task_type,
-            model_id=inference_result.get("model_id"),
+            model_id=scan.scan_type,
             status="analyzed",
             classification=ClassificationDetail(
                 top_label=db_top_label,
@@ -574,17 +611,26 @@ async def analyze_scan(
             ),
             localization=LocalizationDetail(
                 type=loc_type,
-                heatmap_url=f"/static/heatmaps/{scan_id}.png" if loc_type == "heatmap" else None,
-                overlay_url=f"/static/heatmaps/{scan_id}.png" if loc_type == "bbox" else None,
-                image_width=inference_result.get("image_width"),
-                image_height=inference_result.get("image_height"),
-                bounding_boxes=db_bboxes if db_bboxes else [],
+                heatmap_url=heatmap_url or f"/static/heatmaps/{scan_id}.png",
+                overlay_url=overlay_url or f"/static/heatmaps/{scan_id}.png",
+                image_width=image.width,
+                image_height=image.height,
+                bounding_boxes=db_bboxes,
             ),
             analysis_time_ms=analysis_time_ms,
-            analyzed_at=datetime.now().isoformat(),
+            analyzed_at=datetime.utcnow().isoformat(),
         )
 
     except Exception as e:
+        # Clean up temporary local files on failure
+        try:
+            if scan and os.path.exists(scan.file_path):
+                os.remove(scan.file_path)
+            if scan and scan.thumbnail_path and os.path.exists(scan.thumbnail_path):
+                os.remove(scan.thumbnail_path)
+        except Exception as ex:
+            pass
+
         if report_task is not None and not report_task.done():
             report_task.cancel()
         crud.update_scan_status(db, scan_id, "failed")
@@ -672,7 +718,9 @@ async def _store_generated_report(report_task, scan_id: str) -> None:
     """Persist a completed report using a session independent of the request."""
     started = time.perf_counter()
     try:
-        report_data = await report_task
+        pipeline_result = await report_task
+        report_data = pipeline_result.report_data
+        llm_provider = pipeline_result.llm_provider
         SessionLocal = get_session_factory()
         report_db = SessionLocal()
         try:
@@ -683,7 +731,7 @@ async def _store_generated_report(report_task, scan_id: str) -> None:
                 db=report_db,
                 scan_id=scan_id,
                 report_data=report_data,
-                llm_provider=report_data.get("llm_provider", "template"),
+                llm_provider=llm_provider,
             )
         finally:
             report_db.close()

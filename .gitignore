@@ -49,6 +49,7 @@ tempCodeRunnerFile.py
 backend/data/
 data/*
 !data/.gitkeep
+test_data/
 *.db
 *.db-journal
 *.sqlite
@@ -93,6 +94,17 @@ docs/
 /frontend/src/assets/
 /frontend/public/icons.svg
 
+# Temporary and scratch investigation files
+token.json
+scratch_*.py
+backend/scratch_*.py
+backend/fix_db.py
+backend/out.json
+smoke_test.py
+backend/smoke_test.py
+test_db.py
+backend/test_db.py
+
 # Framework/tool state
 .streamlit/
 .cache/
@@ -102,14 +114,7 @@ docs/
 .pdm-build/
 .pixi/
 __pypackages__/
-data/
-
-test_data/
-
-data/
-test_data/
 
 # Active Jeevansh models
 !models/jeevansh/
 !models/jeevansh/*
-test_data/

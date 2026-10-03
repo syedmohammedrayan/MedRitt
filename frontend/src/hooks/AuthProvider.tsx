@@ -93,6 +93,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('medrittai_username', identity.username);
   }, []);
 
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'medrittai_user' && e.newValue) {
+        try { setUser(JSON.parse(e.newValue)); } catch {}
+      }
+      if (e.key === 'medrittai_token') {
+        if (!e.newValue) {
+          setToken(null);
+          setUser(null);
+          setUsername(null);
+        } else {
+          setToken(e.newValue);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   const refreshUser = useCallback(async () => {
     const identity = await getMe();
     setCurrentUser(identity);

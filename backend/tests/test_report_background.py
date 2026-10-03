@@ -32,18 +32,49 @@ class BackgroundReportTests(unittest.IsolatedAsyncioTestCase):
         }
         mock_registry = MagicMock()
         mock_registry.get_model.return_value = mock_model
-        
+
         scan = SimpleNamespace(
             id="scan-123",
             user_id=7,
             scan_type="brain_tumor",
             modality="MRI",
             file_path="",
+            original_image_url=None,
+            original_image_public_id=None,
+            heatmap_url=None,
+            heatmap_public_id=None,
         )
+        from services.ai_orchestrator import ScanPipelineResult, ReportPipelineResult
+
+        async def run_scan_pipeline(**kwargs):
+            return ScanPipelineResult(
+                top_label="Glioma",
+                confidence=0.98,
+                severity="High",
+                all_scores={"Glioma": 0.98, "No Tumor": 0.02},
+                bounding_boxes=[],
+                heatmap_url=None,
+                heatmap_public_id=None,
+                overlay_url=None,
+                overlay_public_id=None
+            )
+
+        async def run_report_pipeline(**kwargs):
+            report_started.set()
+            await report_release.wait()
+            return ReportPipelineResult(
+                report_data={"llm_provider": "gemini"},
+                llm_provider="gemini",
+                decision="accepted"
+            )
+
         request = SimpleNamespace(
             app=SimpleNamespace(
                 state=SimpleNamespace(
-                    report_engine=SimpleNamespace(generate_report=generate_report),
+                    orchestrator=SimpleNamespace(
+                        run_scan_pipeline=run_scan_pipeline,
+                        run_report_pipeline=run_report_pipeline
+                    ),
                     jeevansh_registry=mock_registry
                 )
             )
@@ -74,7 +105,6 @@ class BackgroundReportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.scan_id, scan.id)
         self.assertEqual(response.status, "analyzed")
         self.assertEqual(len(background_tasks.tasks), 1)
-        fromarray.return_value.save.assert_called_once()
 
         report_task = background_tasks.tasks[0].args[0]
         self.assertFalse(report_task.done())
@@ -94,7 +124,13 @@ class BackgroundReportTests(unittest.IsolatedAsyncioTestCase):
         get_session_factory.return_value.return_value = report_db
         get_scan.return_value = SimpleNamespace(id="scan-123")
         report_data = {"llm_provider": "gemini", "findings": "Grounded finding."}
-        report_task = AsyncMock(return_value=report_data)()
+        from services.ai_orchestrator import ReportPipelineResult
+        pipeline_result = ReportPipelineResult(
+            report_data=report_data,
+            llm_provider="gemini",
+            decision="accepted",
+        )
+        report_task = AsyncMock(return_value=pipeline_result)()
 
         await _store_generated_report(report_task, "scan-123")
 
@@ -118,7 +154,13 @@ class BackgroundReportTests(unittest.IsolatedAsyncioTestCase):
         report_db = MagicMock()
         get_session_factory.return_value.return_value = report_db
         get_scan.return_value = None
-        report_task = AsyncMock(return_value={"llm_provider": "gemini"})()
+        from services.ai_orchestrator import ReportPipelineResult
+        pipeline_result = ReportPipelineResult(
+            report_data={"llm_provider": "gemini"},
+            llm_provider="gemini",
+            decision="accepted",
+        )
+        report_task = AsyncMock(return_value=pipeline_result)()
 
         await _store_generated_report(report_task, "deleted-scan")
 

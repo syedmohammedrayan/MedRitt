@@ -51,6 +51,47 @@ class PDFGeneratorTests(unittest.TestCase):
         self.assertGreater(len(pdf), 5_000)
         self.assertGreaterEqual(pdf.count(b"/Type /Page"), 2)
 
+    def test_professional_pdf_dual_images_for_all_tests(self):
+        test_cases = [
+            ("skin_cancer", "classification", "Vascular_Lesion"),
+            ("pneumonia", "classification", "Pneumonia"),
+            ("brain_tumor", "classification", "Pituitary"),
+            ("bone_fracture", "detection", "Fracture"),
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            heatmap_path = Path(directory) / "heatmap.png"
+            orig_path = Path(directory) / "orig.png"
+            Image.new("RGB", (256, 256), (255, 100, 0)).save(heatmap_path)
+            Image.new("RGB", (256, 256), (50, 50, 50)).save(orig_path)
+
+            for scan_type, task_type, label in test_cases:
+                report = {
+                    "patient_id": "TEST-DUAL",
+                    "scan_date": "2026-10-04",
+                    "scan_type": scan_type,
+                    "task_type": task_type,
+                    "modality": "X-ray" if "xray" in scan_type or "fracture" in scan_type or "pneumonia" in scan_type else "Dermatoscopic",
+                    "top_label": label,
+                    "confidence": 0.95,
+                    "severity": "Moderate",
+                    "clinical_history": "Clinical test history.",
+                    "technique": "Diagnostic acquisition.",
+                    "findings": "Clear visualization of region.",
+                    "impression": f"Identified {label}.",
+                    "all_scores": {label: 0.95, "Negative": 0.05},
+                    "heatmap_target_label": label,
+                    "is_final": True,
+                }
+                pdf = PDFGenerator().generate_pdf(
+                    report,
+                    f"test-{scan_type}",
+                    heatmap_path=str(heatmap_path),
+                    original_image_path=str(orig_path),
+                )
+                self.assertTrue(pdf.startswith(b"%PDF"))
+                self.assertGreater(len(pdf), 5_000)
+
 
 if __name__ == "__main__":
     unittest.main()

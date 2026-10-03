@@ -22,41 +22,30 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "info"
 
     # --- Security ---
-    SECRET_KEY: str = "medrittai-hackathon-change-in-production"
+    SECRET_KEY: str = Field(..., description="Secret key required for session/JWT encryption")
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY_HOURS: int = 8
 
     # --- Database ---
     DATA_DIR: str = Field(default="./data", description="Root directory for runtime data")
-    DATABASE_URL: Optional[str] = Field(
-        default=None,
-        description="PostgreSQL/Neon connection string. Falls back to local SQLite when unset.",
+    DATABASE_URL: str = Field(
+        default="sqlite:///./data/medritt.db",
+        description="SQLite connection string. Required.",
     )
-
-
 
     # --- Pre-inference scan type verification ---
     STRICT_SCAN_TYPE_VALIDATION: bool = True
     SCAN_TYPE_VERIFIER_MODEL: Optional[str] = None
-    SCAN_TYPE_GROQ_MODEL: str = "qwen/qwen3.6-27b"
+    SCAN_TYPE_GROQ_MODEL: str = "qwen/qwen3.8-27b"
     SCAN_TYPE_MIN_CONFIDENCE: float = 0.85
 
     # --- Clinical report generation ---
-    MAIRA_API_URL: Optional[str] = Field(
-        default=None,
-        description="Base URL for the MAIRA-2 chest X-ray report service",
-    )
-    MAIRA_TIMEOUT_SECONDS: float = Field(
-        default=120.0,
-        gt=0,
-        description="Maximum time to wait for MAIRA-2 before using the existing fallback pipeline",
-    )
     GEMINI_API_KEY: Optional[str] = Field(
         default=None,
-        description="Google Gemini API key for multimodal image-aware reports"
+        description="Google Gemini API Key for generation tasks"
     )
     GEMINI_MODEL: str = Field(
-        default="gemini-3-flash-preview",
+        default="gemini-1.5-flash",
         description="Preferred Gemini model for image-aware reports"
     )
     SARVAM_API_KEY: Optional[str] = Field(
@@ -67,22 +56,19 @@ class Settings(BaseSettings):
         default="sarvam-translate:v1",
         description="Sarvam text translation model"
     )
+    GROQ_ENABLED: bool = True
     GROQ_API_KEY: Optional[str] = Field(
         default=None,
         description="Groq API key for Llama 3.1 (fastest, free tier available)"
     )
-    ANTHROPIC_API_KEY: Optional[str] = Field(
-        default=None,
-        description="Anthropic API key for Claude 3 Haiku"
-    )
-    OPENAI_API_KEY: Optional[str] = Field(
-        default=None,
-        description="OpenAI API key for GPT-4o-mini"
-    )
 
-    # --- Demo User ---
-    DEMO_USER: str = "demo"
-    DEMO_PASSWORD: str = "demo123"
+    # --- NVIDIA NIM ---
+    NVIDIA_ENABLED: bool = True
+    NVIDIA_API_KEY: Optional[str] = Field(
+        default=None,
+        description="NVIDIA API Key"
+    )
+    NVIDIA_MODEL: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
 
     # --- Server ---
     BACKEND_HOST: str = "0.0.0.0"
@@ -109,18 +95,6 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
 
-    @property
-    def database_url(self) -> str:
-        if self.DATABASE_URL:
-            # Neon supplies a standard PostgreSQL URL. Select Psycopg 3
-            # explicitly so deployments do not depend on legacy psycopg2.
-            if self.DATABASE_URL.startswith("postgresql://"):
-                return self.DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
-            if self.DATABASE_URL.startswith("postgres://"):
-                return self.DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
-            return self.DATABASE_URL
-        db_path = os.path.join(self.DATA_DIR, "app.db")
-        return f"sqlite:///{db_path}"
 
     @property
     def uploads_dir(self) -> str:
@@ -140,20 +114,14 @@ class Settings(BaseSettings):
 
     def has_llm_key(self) -> bool:
         """Check if any LLM API key is configured."""
-        return bool(self.MAIRA_API_URL or self.GEMINI_API_KEY or self.GROQ_API_KEY or self.ANTHROPIC_API_KEY or self.OPENAI_API_KEY)
+        return bool(self.GEMINI_API_KEY or self.GROQ_API_KEY)
 
     def get_llm_provider_name(self) -> str:
         """Return the name of the first available LLM provider."""
-        if self.MAIRA_API_URL:
-            return "maira-2"
-        elif self.GEMINI_API_KEY:
+        if self.GEMINI_API_KEY:
             return "gemini"
         elif self.GROQ_API_KEY:
             return "groq"
-        elif self.ANTHROPIC_API_KEY:
-            return "claude"
-        elif self.OPENAI_API_KEY:
-            return "openai"
         return "template"
 
     def resolve_path(self, path: Optional[str]) -> Optional[str]:

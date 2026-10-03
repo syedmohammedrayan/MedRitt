@@ -24,6 +24,7 @@ from .models import (
     Result,
     Scan,
     User,
+    UserSecurityQuestion,
 )
 
 
@@ -66,8 +67,72 @@ def get_user_by_username(db: Session, username: str) -> User | None:
     return db.query(User).filter(User.username == username).first()
 
 
+def get_user_by_identifier(db: Session, identifier: str) -> User | None:
+    """Get user by username or email (case-insensitive)."""
+    ident = identifier.strip().lower()
+    return db.query(User).filter(
+        (func.lower(User.username) == ident) |
+        ((User.email != "") & (func.lower(User.email) == ident))
+    ).first()
+
+
 def get_user(db: Session, user_id: int) -> User | None:
     return db.query(User).filter(User.id == user_id).first()
+
+
+def update_user_password(db: Session, user_id: int, hashed_password: str) -> User | None:
+    """
+    Replace the user's old password in the database with the newly hashed password.
+    Commits changes to SQLite and refreshes the user record.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return None
+    user.hashed_password = hashed_password
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def get_user_security_questions(db: Session, user_id: int) -> list[UserSecurityQuestion]:
+    """Return all security question rows saved for this user, ordered by id."""
+    return (
+        db.query(UserSecurityQuestion)
+        .filter(UserSecurityQuestion.user_id == user_id)
+        .order_by(UserSecurityQuestion.id)
+        .all()
+    )
+
+
+def set_user_security_questions(
+    db: Session,
+    user_id: int,
+    questions_data: list[dict],
+) -> list[UserSecurityQuestion]:
+    """
+    Replace all security questions for a user atomically.
+    questions_data is a list of dicts with keys: question_id, answer_hash.
+    """
+    # Delete existing rows first
+    db.query(UserSecurityQuestion).filter(
+        UserSecurityQuestion.user_id == user_id
+    ).delete(synchronize_session=False)
+
+    new_rows: list[UserSecurityQuestion] = []
+    for q in questions_data:
+        row = UserSecurityQuestion(
+            user_id=user_id,
+            question_id=q["question_id"],
+            answer_hash=q["answer_hash"],
+        )
+        db.add(row)
+        new_rows.append(row)
+
+    db.commit()
+    for row in new_rows:
+        db.refresh(row)
+    return new_rows
+
 
 
 def get_users_by_role(db: Session, role: str) -> list[User]:
@@ -77,6 +142,98 @@ def get_users_by_role(db: Session, role: str) -> list[User]:
         .order_by(User.full_name.asc(), User.username.asc())
         .all()
     )
+
+
+def hard_delete_user(db: Session, user_id: int) -> None:
+    """
+    Permanently delete a staff user (doctor, lab_tech, pharmacy) from the database.
+    Deletes all related records that reference this user where FK is NOT NULL.
+    """
+    from .models import Report, Result
+
+    # Delete pharmacy stock movements referencing this user
+    db.query(PharmacyStockMovement).filter(
+        PharmacyStockMovement.pharmacy_id == user_id
+    ).delete(synchronize_session=False)
+    db.query(PharmacyStockMovement).filter(
+        PharmacyStockMovement.created_by_user_id == user_id
+    ).delete(synchronize_session=False)
+
+    # Delete pharmacy inventory
+    db.query(PharmacyInventory).filter(
+        PharmacyInventory.pharmacy_id == user_id
+    ).delete(synchronize_session=False)
+
+    # Delete pharmacy bills where this user is the pharmacy
+    db.query(PharmacyBill).filter(
+        PharmacyBill.pharmacy_id == user_id
+    ).delete(synchronize_session=False)
+
+    # Nullify assigned_lab_tech_id on diagnostic orders (nullable column)
+    db.query(DiagnosticOrder).filter(
+        DiagnosticOrder.assigned_lab_tech_id == user_id
+    ).update({DiagnosticOrder.assigned_lab_tech_id: None}, synchronize_session=False)
+
+    # Delete case studies for appointments where this user is the doctor
+    doctor_appointment_ids = [
+        a.id for a in db.query(Appointment.id).filter(Appointment.doctor_id == user_id).all()
+    ]
+    if doctor_appointment_ids:
+        # Delete case studies
+        db.query(CaseStudy).filter(
+            CaseStudy.appointment_id.in_(doctor_appointment_ids)
+        ).delete(synchronize_session=False)
+
+        # Delete prescriptions for these appointments
+        db.query(Prescription).filter(
+            Prescription.appointment_id.in_(doctor_appointment_ids)
+        ).delete(synchronize_session=False)
+
+        # Delete diagnostic orders for these appointments
+        db.query(DiagnosticOrder).filter(
+            DiagnosticOrder.appointment_id.in_(doctor_appointment_ids)
+        ).delete(synchronize_session=False)
+
+        # Delete the appointments themselves
+        db.query(Appointment).filter(
+            Appointment.id.in_(doctor_appointment_ids)
+        ).delete(synchronize_session=False)
+
+    # Delete prescriptions where this user is the doctor (without appointment)
+    db.query(Prescription).filter(
+        Prescription.doctor_id == user_id
+    ).delete(synchronize_session=False)
+
+    # Delete diagnostic orders where this user is the ordering doctor
+    db.query(DiagnosticOrder).filter(
+        DiagnosticOrder.ordering_doctor_id == user_id
+    ).delete(synchronize_session=False)
+
+    # Delete security questions for this user
+    db.query(UserSecurityQuestion).filter(
+        UserSecurityQuestion.user_id == user_id
+    ).delete(synchronize_session=False)
+
+    # Nullify lab_tech_id on scans (nullable column)
+    db.query(Scan).filter(Scan.lab_tech_id == user_id).update(
+        {Scan.lab_tech_id: None}, synchronize_session=False
+    )
+
+    # Delete scans owned by this user — first delete results and reports
+    scan_ids = [
+        s.id for s in db.query(Scan.id).filter(Scan.user_id == user_id).all()
+    ]
+    if scan_ids:
+        db.query(Report).filter(Report.scan_id.in_(scan_ids)).delete(synchronize_session=False)
+        db.query(Result).filter(Result.scan_id.in_(scan_ids)).delete(synchronize_session=False)
+        db.query(Scan).filter(Scan.id.in_(scan_ids)).delete(synchronize_session=False)
+
+    # Finally delete the user row
+    db.query(User).filter(User.id == user_id).delete(synchronize_session=False)
+    db.commit()
+
+
+
 
 
 # ============================================================
@@ -93,6 +250,8 @@ def create_scan(
     file_path: str,
     thumbnail_path: str | None = None,
     file_size_bytes: int | None = None,
+    original_image_url: str | None = None,
+    original_image_public_id: str | None = None,
     lab_tech_id: int | None = None,
 ) -> Scan:
     """Create a new scan record."""
@@ -105,6 +264,8 @@ def create_scan(
         file_path=file_path,
         thumbnail_path=thumbnail_path,
         file_size_bytes=file_size_bytes,
+        original_image_url=original_image_url,
+        original_image_public_id=original_image_public_id,
         lab_tech_id=lab_tech_id,
         status="uploaded",
     )
@@ -667,11 +828,30 @@ def update_scan_status(db: Session, scan_id: str, status: str) -> Scan | None:
     return scan
 
 
-def update_scan_heatmap(db: Session, scan_id: str, heatmap_path: str) -> Scan | None:
+
+def update_scan_cloudinary(
+    db: Session,
+    scan_id: str,
+    heatmap_url: str | None = None,
+    heatmap_public_id: str | None = None
+) -> Scan | None:
+    scan = get_scan(db, scan_id)
+    if scan:
+        if heatmap_url:
+            scan.heatmap_url = heatmap_url
+        if heatmap_public_id:
+            scan.heatmap_public_id = heatmap_public_id
+        db.commit()
+        db.refresh(scan)
+    return scan
+
+def update_scan_heatmap(db: Session, scan_id: str, heatmap_path: str, heatmap_url: str | None = None, heatmap_public_id: str | None = None) -> Scan | None:
     """Update scan with heatmap path after analysis."""
     scan = get_scan(db, scan_id)
     if scan:
         scan.heatmap_path = heatmap_path
+        scan.heatmap_url = heatmap_url
+        scan.heatmap_public_id = heatmap_public_id
         db.commit()
         db.refresh(scan)
     return scan
@@ -695,6 +875,8 @@ def create_result(
     image_width: int | None = None,
     image_height: int | None = None,
     overlay_path: str | None = None,
+    overlay_url: str | None = None,
+    overlay_public_id: str | None = None,
     analysis_time_ms: int | None = None,
 ) -> Result:
     """Create an inference result for a scan."""
@@ -711,6 +893,8 @@ def create_result(
         image_width=image_width,
         image_height=image_height,
         overlay_path=overlay_path,
+        overlay_url=overlay_url,
+        overlay_public_id=overlay_public_id,
         analysis_time_ms=analysis_time_ms,
     )
     db.add(result)
@@ -838,3 +1022,30 @@ def delete_user_scans(
         db.commit()
 
     return deleted_ids
+
+
+# ============================================================
+# SECURITY QUESTIONS
+# ============================================================
+
+from .models import UserSecurityQuestion
+
+def set_user_security_questions(db: Session, user_id: int, questions_data: list[dict]):
+    """Set or update security questions for a user."""
+    # Delete existing
+    db.query(UserSecurityQuestion).filter(UserSecurityQuestion.user_id == user_id).delete()
+
+    # Insert new
+    for q in questions_data:
+        sq = UserSecurityQuestion(
+            user_id=user_id,
+            question_id=q["question_id"],
+            answer_hash=q["answer_hash"]
+        )
+        db.add(sq)
+
+    db.commit()
+
+def get_user_security_questions(db: Session, user_id: int) -> list[UserSecurityQuestion]:
+    """Get security questions configured by a user."""
+    return db.query(UserSecurityQuestion).filter(UserSecurityQuestion.user_id == user_id).all()

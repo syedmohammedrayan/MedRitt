@@ -11,7 +11,7 @@ interface ResultPanelProps {
 export default function ResultPanel({ classification, localization, scanType, taskType = 'classification', analysisTimeMs }: ResultPanelProps) {
   const { all_scores, confidence, severity, top_label } = classification;
   const isDetection = taskType === 'detection';
-  
+
   const scores = all_scores ? Object.entries(all_scores).sort(([, a], [, b]) => b - a) : [];
   const modelName = ({
     chest_xray: 'RAD-DINO · 3-class research head',
@@ -25,6 +25,22 @@ export default function ResultPanel({ classification, localization, scanType, ta
   } as Record<string, string>)[scanType] || 'Diagnostic model';
 
   const detections = localization?.bounding_boxes || [];
+
+  // Consolidate detections by class so repetitive bounding boxes (e.g. 6 brain_tumor boxes) don't show multiple duplicate lines
+  const groupedDetections = (() => {
+    const map = new Map<string, { label: string; maxConfidence: number; count: number }>();
+    for (const det of detections) {
+      const cls = det.class || 'Detected Region';
+      const existing = map.get(cls);
+      if (!existing) {
+        map.set(cls, { label: cls, maxConfidence: det.confidence, count: 1 });
+      } else {
+        existing.maxConfidence = Math.max(existing.maxConfidence, det.confidence);
+        existing.count += 1;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.maxConfidence - a.maxConfidence);
+  })();
 
   return (
     <aside className="result-panel">
@@ -51,18 +67,24 @@ export default function ResultPanel({ classification, localization, scanType, ta
 
       {isDetection ? (
         <div className="scores-card">
-          <div className="card-title-row"><p className="eyebrow">Detected objects</p><span>{detections.length} items</span></div>
+          <div className="card-title-row">
+            <p className="eyebrow">Detected objects</p>
+            <span>{groupedDetections.length === 1 ? `${detections.length} findings` : `${groupedDetections.length} findings`}</span>
+          </div>
           <div className="score-list">
-            {detections.length === 0 ? (
+            {groupedDetections.length === 0 ? (
               <div className="history-empty" style={{ padding: '1rem', textAlign: 'center' }}>
                 <p>No objects detected.</p>
               </div>
             ) : (
-              detections.map((det, i) => (
+              groupedDetections.map((item, i) => (
                 <div key={i} className="is-primary">
-                  <span>{det.class}</span>
-                  <i><b style={{ width: `${Math.min(det.confidence * 100, 100)}%` }} /></i>
-                  <strong>{(det.confidence * 100).toFixed(1)}%</strong>
+                  <span>
+                    {item.label}
+                    {item.count > 1 ? ` (${item.count} findings)` : ''}
+                  </span>
+                  <i><b style={{ width: `${Math.min(item.maxConfidence * 100, 100)}%` }} /></i>
+                  <strong>{(item.maxConfidence * 100).toFixed(1)}%</strong>
                 </div>
               ))
             )}

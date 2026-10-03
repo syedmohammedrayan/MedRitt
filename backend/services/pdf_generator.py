@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class PDFGenerator:
     """
     Generates formatted PDF clinical reports.
-    
+
     Generates a native, multi-page ReportLab document on every supported OS.
     The HTML renderer is retained only for preview/testing compatibility.
     """
@@ -22,7 +22,7 @@ class PDFGenerator:
     def __init__(self, template_dir: Optional[str] = None):
         """
         Initialize with the report template directory.
-        
+
         Args:
             template_dir: Path to templates directory. Defaults to backend/templates/
         """
@@ -39,12 +39,12 @@ class PDFGenerator:
     def render_html(self, report_data: dict, scan_id: str, heatmap_path: str = "") -> str:
         """
         Render report data into an HTML string.
-        
+
         Args:
             report_data: Full report dictionary from LLMReportEngine
             scan_id: Scan UUID for the report header
             heatmap_path: Absolute path to heatmap image for base64 embedding
-            
+
         Returns:
             Rendered HTML string
         """
@@ -92,10 +92,23 @@ class PDFGenerator:
             limitations=report_data.get("limitations", ""),
         )
 
-    def generate_pdf(self, report_data: dict, scan_id: str, heatmap_path: str = "") -> bytes:
+    def generate_pdf(
+        self,
+        report_data: dict,
+        scan_id: str,
+        heatmap_path: str = "",
+        original_image_path: str = "",
+    ) -> bytes:
         """Generate the professional PDF without native GTK/Pango dependencies."""
+        if not original_image_path:
+            original_image_path = report_data.get("original_image_path") or report_data.get("image_path") or ""
+        if not heatmap_path:
+            heatmap_path = report_data.get("heatmap_path") or ""
+
         try:
-            pdf_bytes = self._generate_professional_pdf(report_data, scan_id, heatmap_path)
+            pdf_bytes = self._generate_professional_pdf(
+                report_data, scan_id, heatmap_path, original_image_path
+            )
             logger.info("Professional PDF generated for scan %s (%s bytes)", scan_id[:8], len(pdf_bytes))
             return pdf_bytes
         except Exception as exc:
@@ -103,7 +116,11 @@ class PDFGenerator:
             return self._generate_simple_pdf(report_data, scan_id)
 
     def _generate_professional_pdf(
-        self, report_data: dict, scan_id: str, heatmap_path: str = "",
+        self,
+        report_data: dict,
+        scan_id: str,
+        heatmap_path: str = "",
+        original_image_path: str = "",
     ) -> bytes:
         from reportlab.lib import colors
         from reportlab.lib.enums import TA_LEFT
@@ -296,26 +313,110 @@ class PDFGenerator:
             Spacer(1, 6),
         ])
 
-        if heatmap_path and os.path.exists(heatmap_path):
+        has_heatmap = bool(heatmap_path and os.path.exists(heatmap_path))
+        has_original = bool(original_image_path and os.path.exists(original_image_path))
+
+        if has_heatmap or has_original:
             from PIL import Image as PILImage
 
-            with PILImage.open(heatmap_path) as heatmap:
-                width, height = heatmap.size
-            image_width = min(doc.width, 132 * mm)
-            image_height = image_width * height / max(width, 1)
-            image_height = min(image_height, 92 * mm)
-            story.extend([
-                Paragraph("GRAD-CAM HEATMAP", section_style),
-                HRFlowable(width="100%", thickness=0.5, color=line, spaceAfter=7),
-                ReportImage(heatmap_path, width=image_width, height=image_height, hAlign="CENTER"),
-                Spacer(1, 4),
-                Paragraph(
-                    "Gradient-weighted class activation map for target: "
-                    f"<b>{markup(report_data.get('heatmap_target_label', 'primary model signal'))}</b>. "
-                    "Warmer regions indicate greater influence on the model output; this is not lesion segmentation.",
-                    small_style,
-                ),
-            ])
+            scan_type = str(report_data.get("scan_type", "")).lower()
+            task_type = str(report_data.get("task_type", "")).lower()
+            is_detection = task_type == "detection" or scan_type == "bone_fracture"
+            target_label = markup(
+                report_data.get("heatmap_target_label")
+                or report_data.get("top_label")
+                or "primary model signal"
+            )
+
+            if is_detection:
+                gradcam_title = "DETECTION OVERLAY / LOCALIZATION"
+                gradcam_desc = (
+                    f"Target finding: <b>{target_label}</b>. "
+                    "Overlay highlights identified regions or fracture boundaries."
+                )
+            else:
+                gradcam_title = "GRAD-CAM ATTRIBUTION MAP"
+                gradcam_desc = (
+                    f"Gradient-weighted activation for target: <b>{target_label}</b>. "
+                    "Warmer regions indicate greater influence on the model output."
+                )
+
+            orig_title = "ORIGINAL DIAGNOSTIC SCAN"
+            orig_desc = "Original unprocessed diagnostic scan supplied for clinical examination."
+
+            def get_image_dims(img_path: str, max_w: float, max_h: float):
+                try:
+                    with PILImage.open(img_path) as im:
+                        w, h = im.size
+                    aspect = h / max(w, 1)
+                    target_w = max_w
+                    target_h = target_w * aspect
+                    if target_h > max_h:
+                        target_h = max_h
+                        target_w = target_h / max(aspect, 1e-6)
+                    return target_w, target_h
+                except Exception as err:
+                    logger.warning(f"Failed reading image dimensions for {img_path}: {err}")
+                    return max_w, max_h
+
+            if has_heatmap and has_original:
+                # SIDE-BY-SIDE: Grad-CAM on LEFT side, Original scan on RIGHT side
+                col_w = doc.width * 0.5
+                max_w = col_w - 6 * mm
+                max_h = 66 * mm
+                hm_w, hm_h = get_image_dims(heatmap_path, max_w, max_h)
+                orig_w, orig_h = get_image_dims(original_image_path, max_w, max_h)
+
+                left_cell = [
+                    Paragraph(f"<b>{gradcam_title}</b>", meta_label),
+                    Spacer(1, 3),
+                    ReportImage(heatmap_path, width=hm_w, height=hm_h, hAlign="CENTER"),
+                    Spacer(1, 4),
+                    Paragraph(gradcam_desc, small_style),
+                ]
+                right_cell = [
+                    Paragraph(f"<b>{orig_title}</b>", meta_label),
+                    Spacer(1, 3),
+                    ReportImage(original_image_path, width=orig_w, height=orig_h, hAlign="CENTER"),
+                    Spacer(1, 4),
+                    Paragraph(orig_desc, small_style),
+                ]
+
+                dual_table = Table([[left_cell, right_cell]], colWidths=[col_w, col_w])
+                dual_table.setStyle(TableStyle([
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]))
+
+                story.extend([
+                    Paragraph("CLINICAL IMAGING & MODEL ATTRIBUTION", section_style),
+                    HRFlowable(width="100%", thickness=0.5, color=line, spaceAfter=7),
+                    dual_table,
+                    Spacer(1, 6),
+                ])
+            elif has_heatmap:
+                hm_w, hm_h = get_image_dims(heatmap_path, min(doc.width, 132 * mm), 88 * mm)
+                story.extend([
+                    Paragraph(gradcam_title, section_style),
+                    HRFlowable(width="100%", thickness=0.5, color=line, spaceAfter=7),
+                    ReportImage(heatmap_path, width=hm_w, height=hm_h, hAlign="CENTER"),
+                    Spacer(1, 4),
+                    Paragraph(gradcam_desc, small_style),
+                    Spacer(1, 6),
+                ])
+            elif has_original:
+                orig_w, orig_h = get_image_dims(original_image_path, min(doc.width, 132 * mm), 88 * mm)
+                story.extend([
+                    Paragraph(orig_title, section_style),
+                    HRFlowable(width="100%", thickness=0.5, color=line, spaceAfter=7),
+                    ReportImage(original_image_path, width=orig_w, height=orig_h, hAlign="CENTER"),
+                    Spacer(1, 4),
+                    Paragraph(orig_desc, small_style),
+                    Spacer(1, 6),
+                ])
 
         scores = report_data.get("all_scores") or {}
         if scores:
@@ -383,6 +484,7 @@ class PDFGenerator:
         edited_recommendations: Optional[str] = None,
         edited_critical_communication: Optional[str] = None,
         heatmap_path: str = "",
+        original_image_path: str = "",
     ) -> bytes:
         """
         Generate PDF with optional clinician edits applied.
@@ -407,7 +509,12 @@ class PDFGenerator:
         if edited_critical_communication:
             data["critical_communication"] = edited_critical_communication
 
-        return self.generate_pdf(data, scan_id, heatmap_path=heatmap_path)
+        return self.generate_pdf(
+            data,
+            scan_id,
+            heatmap_path=heatmap_path,
+            original_image_path=original_image_path,
+        )
 
     def generate_case_study_pdf(self, case_study: dict) -> bytes:
         """Generate a portable multi-section summary of the full patient journey."""

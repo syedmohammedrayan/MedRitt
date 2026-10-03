@@ -30,10 +30,4 @@ Next steps:
        npm run dev
   4. Docker:
        docker compose up --build
-
-Demo credentials:
-  patient: patient / patient123
-  doctor: dr.sharma / doctor123
-  lab technician: lab.tech / lab123
-  legacy clinician: demo / demo123
 MSG

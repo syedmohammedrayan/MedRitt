@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getMyAppointments, getMyCaseStudies, getMyDiagnosticOrders } from '../api/client';
+import { getDoctorReports, getMyAppointments, getMyCaseStudies, getMyDiagnosticOrders } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import type { Appointment, CaseStudy, DiagnosticOrder } from '../types';
 
@@ -10,7 +10,25 @@ export default function DoctorDashboard() {
   const [orders, setOrders] = useState<DiagnosticOrder[]>([]);
   const [cases, setCases] = useState<CaseStudy[]>([]);
   const [error, setError] = useState('');
-  useEffect(() => { Promise.all([getMyAppointments(), getMyDiagnosticOrders(), getMyCaseStudies()]).then(([a, o, c]) => { setAppointments(a); setOrders(o); setCases(c); }).catch((err) => setError(err.response?.data?.detail || 'Could not load clinical queue.')); }, []);
+  const fetchQueue = () => {
+    Promise.all([getMyAppointments(), getMyDiagnosticOrders(), getMyCaseStudies()])
+      .then(([a, o, c]) => { setAppointments(a); setOrders(o); setCases(c); })
+      .catch((err) => setError(err.response?.data?.detail || 'Could not load clinical queue.'));
+  };
+
+  useEffect(() => {
+    fetchQueue();
+    const interval = setInterval(fetchQueue, 10000); // Auto-refresh every 10 seconds
+    return () => clearInterval(interval);
+  }, [user]);
+  const [reportCount, setReportCount] = useState<number | null>(null);
+  const [pendingReview, setPendingReview] = useState<number | null>(null);
+  useEffect(() => {
+    getDoctorReports().then((response) => {
+      setReportCount(response.total);
+      setPendingReview(response.reports.filter((item) => !item.doctor_approved).length);
+    }).catch(() => { setReportCount(0); setPendingReview(0); });
+  }, [user]);
   const active = appointments.filter((item) => !['completed', 'cancelled'].includes(item.status));
   return (
     <div className="workspace-page portal-page">
@@ -29,11 +47,11 @@ export default function DoctorDashboard() {
             {!appointments.length && <div className="portal-empty">No appointments in your queue.</div>}
           </div>
         </section>
-        <section className="portal-card">
-          <header><div><p className="eyebrow">Diagnostic inbox</p><h2>Reports</h2></div></header>
+                <section className="portal-card">
+          <header><div><p className="eyebrow">Diagnostic inbox</p><h2>Reports</h2></div><Link to="/doctor/reports">View all reports →</Link></header>
           <div className="record-list">
-            {orders.map((item) => item.scan_id ? <Link key={item.id} to={`/results/${item.scan_id}`} className="record-row record-row--link"><span className="record-icon">AI</span><div><strong>{item.patient.full_name}</strong><small>{item.scan_type.replace('_', ' ')} · {item.status}</small><p>{item.clinical_notes}</p></div><span>Review →</span></Link> : <article key={item.id} className="record-row"><span className="record-icon">{item.priority[0].toUpperCase()}</span><div><strong>{item.patient.full_name}</strong><small>{item.scan_type.replace('_', ' ')} · lab pending</small><p>{item.clinical_notes}</p></div><span className="status-pill">{item.status}</span></article>)}
-            {!orders.length && <div className="portal-empty">No diagnostic orders yet.</div>}
+            <Link to="/doctor/reports" className="record-row record-row--link"><span className="record-icon">Rp</span><div><strong>{reportCount === null ? '—' : reportCount} reports available</strong><small>{pendingReview === null ? 'Loading review status' : `${pendingReview} pending your review`}</small><p>Search patient-wise report history from the first study to the latest.</p></div><span>Open →</span></Link>
+            {orders.filter((item) => !item.scan_id).length > 0 && <article className="record-row"><span className="record-icon">Lb</span><div><strong>{orders.filter((item) => !item.scan_id).length} studies awaiting lab</strong><small>Ordered tests not yet uploaded by the lab</small></div><span className="status-pill">pending</span></article>}
           </div>
         </section>
       </div>

@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { claimDiagnosticOrder, getPendingDiagnosticOrders } from '../api/client';
 import type { DiagnosticOrder } from '../types';
+import { useAuth } from '../hooks/useAuth';
 
 export default function LabDashboard() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<DiagnosticOrder[]>([]);
   const [error, setError] = useState('');
   const load = () => getPendingDiagnosticOrders().then(setOrders).catch((err) => setError(err.response?.data?.detail || 'Could not load the lab queue.'));
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [user]);
   const claim = async (id: number) => { try { await claimDiagnosticOrder(id); load(); } catch (err: any) { setError(err.response?.data?.detail || 'Could not claim this order.'); } };
   return (
     <div className="workspace-page portal-page">

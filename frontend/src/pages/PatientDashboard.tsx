@@ -26,7 +26,7 @@ export default function PatientDashboard() {
         setAppointments(nextAppointments); setOrders(nextOrders); setPrescriptions(nextPrescriptions); setCases(nextCases); setBills(nextBills);
       })
       .catch((err) => setError(err.response?.data?.detail || 'Could not load your care timeline.'));
-  }, []);
+  }, [user]);
 
   const nextAppointment = appointments.find((item) => !['completed', 'cancelled'].includes(item.status));
   const billedPrescriptionIds = new Set(bills.map((bill) => bill.prescription.id));
@@ -70,7 +70,7 @@ export default function PatientDashboard() {
           </div>
         </section>
         <section className="portal-card">
-          <header><div><p className="eyebrow">Clinical documents</p><h2>Recent records</h2></div></header>
+          <header><div><p className="eyebrow">Clinical documents</p><h2>Recent records</h2></div><Link to="/patient/reports" style={{ fontWeight: 700 }}>Reports track →</Link></header>
           <div className="record-list">
             {cases.map((item) => <Link key={`case-${item.id}`} to={`/patient/case-study/${item.id}`} className="record-row record-row--link"><span className="record-icon">CS</span><div><strong>Case study #{item.id}</strong><small>{item.status} · {item.scan_ids.length} linked scans</small><p>{item.diagnosis || item.chief_complaint}</p></div><span>→</span></Link>)}
             {orders.filter((item) => item.scan_id && item.status === 'reviewed').map((item) => {
@@ -82,7 +82,7 @@ export default function PatientDashboard() {
         </section>
       </div>
       <section className="portal-card patient-medicine-card patient-medicine-card--full">
-        <header><div><p className="eyebrow">Prescription to pharmacy</p><h2>Medicines and bills</h2></div><span className="status-pill">Shared by your medicine shop</span></header>
+        <header><div><p className="eyebrow">Prescription to pharmacy</p><h2>Medicines and bills</h2></div><Link to="/patient/prescriptions" style={{ fontWeight: 700 }}>View all visits & medicines →</Link></header>
         <div className="record-list">
           {bills.map((bill) => <Link key={`bill-${bill.id}`} to={`/medicine-bills/${bill.id}`} className="record-row record-row--link medicine-bill-record"><span className="record-icon">₹</span><div><strong>{bill.invoice_number} · {currency.format(bill.total)}</strong><small>{bill.pharmacy.full_name} · <b>{bill.status}</b></small><p>{bill.items.map((item) => item.name).join(', ')}</p></div><span>View bill →</span></Link>)}
           {prescriptions.filter((prescription) => !billedPrescriptionIds.has(prescription.id)).map((prescription) => <article key={`rx-${prescription.id}`} className="record-row"><span className="record-icon">Rx</span><div><strong>{prescription.medications.map((item) => item.name).join(', ') || `Prescription #${prescription.id}`}</strong><small>{prescription.doctor.full_name} · sent to medicine shop</small><p>Awaiting availability check and itemized bill.</p></div><span className="status-pill">Awaiting bill</span></article>)}

@@ -30,7 +30,14 @@ export default function ConsultationPage() {
   const saveNotes = async () => { const next = await updateAppointmentNotes(id, notes); setAppointment(next); setMessage('Consultation notes saved.'); };
   const orderTest = async () => { await createDiagnosticOrder({ appointment_id: id, scan_type: scanType, priority, clinical_notes: clinicalNotes }); setClinicalNotes(''); setMessage('Diagnostic order sent to the radiology lab.'); };
   const prescribe = async () => { await createPrescription({ appointment_id: id, medications: medications.filter((item) => item.medicine_id !== null), instructions, diagnosis }); setMessage('Prescription added to the patient record.'); };
-  const createCase = async () => { const item = await generateCaseStudy({ appointment_id: id, clinical_history: notes, diagnosis, treatment_plan: instructions, follow_up_plan: followUp }); navigate(`/doctor/case-study/${item.id}`); };
+  const createCase = async () => {
+    const validMeds = medications.filter((item) => item.medicine_id !== null);
+    if (validMeds.length > 0) {
+      await createPrescription({ appointment_id: id, medications: validMeds, instructions, diagnosis });
+    }
+    const item = await generateCaseStudy({ appointment_id: id, clinical_history: notes, diagnosis, treatment_plan: instructions, follow_up_plan: followUp });
+    navigate(`/doctor/case-study/${item.id}`);
+  };
   const safe = async (action: () => Promise<void>) => { setError(''); setMessage(''); try { await action(); } catch (err: any) { setError(err.response?.data?.detail || 'Could not save this clinical action.'); } };
 
   if (!appointment) return <div className="workspace-page portal-page">{error || 'Loading consultation…'}</div>;

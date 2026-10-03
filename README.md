@@ -1,4 +1,9 @@
 # MedRittAI
+## Final Architecture
+
+- SQLite = only application database
+- Cloudinary = only persistent file/asset storage
+
 
 MedRittAI is a multi-role hospital diagnostic workflow platform connecting patients, doctors, lab technicians, and explainable AI. It covers appointment booking, consultation, diagnostic ordering, scan analysis, doctor sign-off, prescriptions, native-language patient communication, and final case-study export.
 
@@ -149,19 +154,6 @@ The API starts without external LLM keys by using its grounded template report
 fallback. A Git/LFS clone includes the brain, lung, and kidney models. The first
 chest-model startup needs internet access to cache the pinned 346 MB RAD-DINO
 CheXpert checkpoint; later starts can use `CHEST_MODEL_LOCAL_FILES_ONLY=true`.
-
-Role-specific development logins:
-
-```text
-Patient: patient / patient123
-Doctor: dr.sharma / doctor123
-Lab technician: lab.tech / lab123
-Pharmacy: pharmacy / pharmacy123
-Administrator: admin / admin123
-Legacy clinician: demo / demo123
-```
-
-Change the demo credentials before sharing or deploying the application.
 
 ## Validation and Tests
 

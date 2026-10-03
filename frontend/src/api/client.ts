@@ -1,5 +1,5 @@
 /**
- * MedRittAI — API Client
+ * MedRittAI â€” API Client
  * Axios-based HTTP client with JWT auth.
  */
 
@@ -11,7 +11,9 @@ import type {
   Doctor, Appointment, AppointmentStatus, DiagnosticOrder, Prescription,
   Medication, CaseStudy, PharmacyBill, PharmacyQueueItem, Medicine,
   PharmacyInventoryItem, PharmacyRestockResult, PharmacyCsvImportResult,
-  DoctorCreateInput, DoctorUpdateInput, ProfileUpdateInput
+  DoctorCreateInput, DoctorUpdateInput, ProfileUpdateInput,
+  DoctorReportIndexResponse,
+  DoctorReportQuery,
 } from '../types';
 
 const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
@@ -71,6 +73,40 @@ export async function uploadProfileAvatar(file: File): Promise<UserSummary> {
 
 export function logout() {
   setAuthToken(null);
+}
+
+// ---- Security Questions & Password Recovery ----
+import type {
+  SecurityQuestion,
+  SecurityQuestionSetupRequest,
+  ForgotPasswordIdentifyRequest,
+  ForgotPasswordVerifyRequest,
+  ForgotPasswordVerifyResponse,
+  ForgotPasswordResetRequest
+} from '../types';
+
+export async function getSecurityQuestionsBank(): Promise<SecurityQuestion[]> {
+  return (await api.get<SecurityQuestion[]>('/auth/security-questions/bank')).data;
+}
+
+export async function getMySecurityQuestions(): Promise<SecurityQuestion[]> {
+  return (await api.get<SecurityQuestion[]>('/auth/security-questions')).data;
+}
+
+export async function setupSecurityQuestions(data: SecurityQuestionSetupRequest): Promise<{ detail: string }> {
+  return (await api.put<{ detail: string }>('/auth/security-questions', data)).data;
+}
+
+export async function forgotPasswordIdentify(data: ForgotPasswordIdentifyRequest): Promise<SecurityQuestion[]> {
+  return (await api.post<SecurityQuestion[]>('/auth/forgot-password/identify', data)).data;
+}
+
+export async function forgotPasswordVerify(data: ForgotPasswordVerifyRequest): Promise<ForgotPasswordVerifyResponse> {
+  return (await api.post<ForgotPasswordVerifyResponse>('/auth/forgot-password/verify', data)).data;
+}
+
+export async function forgotPasswordReset(data: ForgotPasswordResetRequest): Promise<{ detail: string }> {
+  return (await api.post<{ detail: string }>('/auth/forgot-password/reset', data)).data;
 }
 
 // ---- Scan ----
@@ -143,6 +179,15 @@ export async function updateAppointmentNotes(id: number, notes: string): Promise
 // ---- Diagnostics ----
 export async function getMyDiagnosticOrders(): Promise<DiagnosticOrder[]> {
   return (await api.get<DiagnosticOrder[]>('/diagnostic/my')).data;
+}
+
+export async function getDoctorReports(query: DoctorReportQuery = {}): Promise<DoctorReportIndexResponse> {
+  const params: Record<string, string> = {};
+  if (query.search?.trim()) params.search = query.search.trim();
+  if (query.scan_type) params.scan_type = query.scan_type;
+  if (query.status) params.status = query.status;
+  if (query.sort) params.sort = query.sort;
+  return (await api.get<DoctorReportIndexResponse>('/reports/doctor', { params })).data;
 }
 
 export async function getPendingDiagnosticOrders(): Promise<DiagnosticOrder[]> {
@@ -326,11 +371,26 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      setAuthToken(null);
-      window.location.href = '/login';
+      const isLoginRequest = error.config?.url === '/auth/login';
+      if (!isLoginRequest) {
+        setAuthToken(null);
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   },
 );
 
 export default api;
+
+// Lab Tech Admin
+export const getAdminLabTechs = () => api.get<UserSummary[]>('/admin/lab-techs').then(res => res.data);
+export const createLabTech = (data: any) => api.post<UserSummary>('/admin/lab-techs', data).then(res => res.data);
+export const deleteLabTech = (id: number) => api.delete<UserSummary>(`/admin/lab-techs/${id}`).then(res => res.data);
+
+// Pharmacy / Chemist Admin
+export const getAdminPharmacyStaff = () => api.get<UserSummary[]>('/admin/pharmacy-staff').then(res => res.data);
+export const createPharmacyStaff = (data: {
+  username: string; password: string; full_name: string; email?: string; phone?: string;
+}) => api.post<UserSummary>('/admin/pharmacy-staff', data).then(res => res.data);
+export const deletePharmacyStaff = (id: number) => api.delete<UserSummary>(`/admin/pharmacy-staff/${id}`).then(res => res.data);

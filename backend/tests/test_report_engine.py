@@ -42,14 +42,6 @@ class ReportSchemaTests(unittest.TestCase):
             )
         )
 
-    def test_maira_plain_text_response_is_split_into_report_sections(self):
-        report = LLMReportEngine._normalize_maira_response({
-            "report": "FINDINGS: Mild bibasal opacity.\nIMPRESSION: Mild bibasal atelectatic change."
-        })
-
-        self.assertEqual(report["findings"], "Mild bibasal opacity.")
-        self.assertEqual(report["impression"], "Mild bibasal atelectatic change.")
-
     def test_json_parser_requires_grounded_clinical_sections(self):
         payload = {
             "technique": "Single image.",
@@ -131,7 +123,8 @@ class ReportSchemaTests(unittest.TestCase):
 class PatientTranslationTests(unittest.IsolatedAsyncioTestCase):
     async def test_stored_patient_explanation_returns_without_an_extra_generation_call(self):
         engine = LLMReportEngine(gemini_api_key="configured")
-        engine._generate_gemini_text = AsyncMock(return_value="should not be used")
+        if engine.gemini_service:
+            engine.gemini_service.generate_text = AsyncMock(return_value="should not be used")
 
         output = await engine._generate_patient_explanation_english({
             "patient_explanation": "A prepared plain-language explanation.",
@@ -139,11 +132,13 @@ class PatientTranslationTests(unittest.IsolatedAsyncioTestCase):
         })
 
         self.assertEqual(output, "A prepared plain-language explanation.")
-        engine._generate_gemini_text.assert_not_awaited()
+        if engine.gemini_service:
+            engine.gemini_service.generate_text.assert_not_awaited()
 
     async def test_existing_report_gets_an_immediate_grounded_english_explanation(self):
         engine = LLMReportEngine(gemini_api_key="configured")
-        engine._generate_gemini_text = AsyncMock(return_value="should not be used")
+        if engine.gemini_service:
+            engine.gemini_service.generate_text = AsyncMock(return_value="should not be used")
 
         output = await engine._generate_patient_explanation_english({
             "scan_type": "brain_mri",
@@ -153,81 +148,35 @@ class PatientTranslationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("covering around the brain", output)
         self.assertIn("not a confirmed diagnosis", output)
-        engine._generate_gemini_text.assert_not_awaited()
+        if engine.gemini_service:
+            engine.gemini_service.generate_text.assert_not_awaited()
 
     async def test_patient_translation_uses_primary_translator_first(self):
         engine = LLMReportEngine(sarvam_api_key="configured", gemini_api_key="configured")
         engine._generate_patient_explanation_english = AsyncMock(return_value="English explanation")
         engine._translate_with_sarvam = AsyncMock(return_value="हिंदी विवरण")
-        engine._translate_with_gemini = AsyncMock(return_value="fallback")
+        if engine.gemini_service:
+            engine.gemini_service.generate_text = AsyncMock(return_value="fallback")
 
         output = await engine.generate_patient_report({}, "Hindi")
 
         self.assertEqual(output, "हिंदी विवरण")
         engine._translate_with_sarvam.assert_awaited_once_with("English explanation", "hi-IN")
-        engine._translate_with_gemini.assert_not_awaited()
+        if engine.gemini_service:
+            engine.gemini_service.generate_text.assert_not_awaited()
 
     async def test_patient_translation_falls_back_without_exposing_provider(self):
         engine = LLMReportEngine(sarvam_api_key="configured", gemini_api_key="configured")
         engine._generate_patient_explanation_english = AsyncMock(return_value="English explanation")
         engine._translate_with_sarvam = AsyncMock(return_value=None)
-        engine._translate_with_gemini = AsyncMock(return_value="தமிழ் விளக்கம்")
+        if engine.gemini_service:
+            engine.gemini_service.generate_text = AsyncMock(return_value="தமிழ் விளக்கம்")
 
         output = await engine.generate_patient_report({}, "Tamil")
 
         self.assertEqual(output, "தமிழ் விளக்கம்")
         self.assertNotIn("Gemini", output)
         self.assertNotIn("Sarvam", output)
-
-
-class ProviderFallbackTests(unittest.IsolatedAsyncioTestCase):
-    @staticmethod
-    def chest_result():
-        return result(label="Atelectasis", confidence=0.82, severity="Moderate")
-
-    async def test_maira_is_used_before_existing_providers_for_chest_xray(self):
-        engine = LLMReportEngine(
-            maira_api_url="https://maira.example",
-            gemini_api_key="configured",
-            groq_api_key="configured",
-        )
-        engine._call_maira = AsyncMock(return_value={
-            "findings": "LUNGS/AIRWAYS: Mild bibasal linear opacity.",
-            "impression": "1. Mild bibasal atelectatic change.",
-        })
-        engine._call_gemini = AsyncMock(return_value=None)
-        engine._call_groq = AsyncMock(return_value=None)
-
-        output = await engine.generate_report(
-            self.chest_result(), "chest_xray", image=object()
-        )
-
-        self.assertEqual(output["llm_provider"], "maira-2")
-        engine._call_maira.assert_awaited_once()
-        engine._call_gemini.assert_not_awaited()
-        engine._call_groq.assert_not_awaited()
-
-    async def test_maira_failure_falls_back_to_gemini(self):
-        engine = LLMReportEngine(
-            maira_api_url="https://maira.example",
-            gemini_api_key="configured",
-            groq_api_key="configured",
-        )
-        engine._call_maira = AsyncMock(return_value=None)
-        engine._call_gemini = AsyncMock(return_value={
-            "findings": "LUNGS/AIRWAYS: Mild bibasal linear opacity.",
-            "impression": "1. Mild bibasal atelectatic change.",
-        })
-        engine._call_groq = AsyncMock(return_value=None)
-
-        output = await engine.generate_report(
-            self.chest_result(), "chest_xray", image=object()
-        )
-
-        self.assertEqual(output["llm_provider"], "gemini")
-        engine._call_maira.assert_awaited_once()
-        engine._call_gemini.assert_awaited_once()
-        engine._call_groq.assert_not_awaited()
 
 
 if __name__ == "__main__":

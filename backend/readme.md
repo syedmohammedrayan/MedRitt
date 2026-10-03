@@ -59,22 +59,3 @@ The SQLite database is:
 ```text
 data/app.db
 ```
-
-## Demo Credentials
-
-Configured in `.env`:
-
-```env
-DEMO_USER=demo
-DEMO_PASSWORD=demo123
-```
-
-Additional seeded credentials:
-
-```text
-patient / patient123
-dr.sharma / doctor123
-lab.tech / lab123
-pharmacy / pharmacy123
-admin / admin123
-```

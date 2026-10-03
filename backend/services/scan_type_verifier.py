@@ -56,7 +56,7 @@ Output only JSON with exactly these fields:
         model: str,
         min_confidence: float = 0.85,
         groq_api_key: Optional[str] = None,
-        groq_model: str = "qwen/qwen3.6-27b",
+        groq_model: str = "qwen/qwen3.8-27b",
     ):
         self.api_key = api_key
         self.model = model
@@ -335,42 +335,9 @@ Output only JSON with exactly these fields:
         return bool(paired and central_density and lower_coverage)
 
     def _verify_with_groq(self, image_b64: str) -> ScanTypeVerification:
-        import httpx
-
-        response = httpx.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.groq_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self.groq_model,
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": self.PROMPT},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_b64}",
-                            },
-                        },
-                    ],
-                }],
-                "temperature": 0.1,
-                "max_completion_tokens": 500,
-                "response_format": {"type": "json_object"},
-                "reasoning_effort": "none",
-            },
-            timeout=httpx.Timeout(
-                8.0, connect=3.0, read=8.0, write=8.0, pool=3.0
-            ),
-        )
-        response.raise_for_status()
-        text = (
-            response.json().get("choices", [{}])[0]
-            .get("message", {}).get("content", "")
-        )
+        from services.groq_service import GroqService
+        service = GroqService(api_key=self.groq_api_key)
+        text = service.verify_scan(image_b64=image_b64, prompt=self.PROMPT, model=self.groq_model)
         if not text:
             raise RuntimeError("Primary vision verifier returned no result")
         return self._parse_response(text)

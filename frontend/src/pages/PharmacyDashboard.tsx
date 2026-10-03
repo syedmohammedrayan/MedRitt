@@ -44,7 +44,7 @@ export default function PharmacyDashboard() {
       })
       .catch((err) => setError(err.response?.data?.detail || 'Could not load prescriptions.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user]);
 
   const selected = queue.find((item) => item.prescription.id === selectedId) ?? null;
   const availableByMedicine = useMemo(() => new Map(inventory.map((item) => [item.medicine.id, item.current_quantity])), [inventory]);

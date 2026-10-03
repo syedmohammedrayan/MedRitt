@@ -40,12 +40,58 @@ async def lifespan(app: FastAPI):
     logger.info("📁 Data directories ready.")
 
     # 2. Initialize database
-    init_db(settings.database_url)
+    init_db(settings.DATABASE_URL)
     logger.info("🗄️ Database initialized.")
 
-    # 3. Seed departments and role-specific demo identities
-    _seed_hospital_demo()
-    logger.info("👥 Hospital demo identities ready.")
+    # 2b. Seed medicine catalog and pharmacy inventory if empty
+    try:
+        from medicine_catalog import MEDICINE_CATALOG
+        from datetime import date, timedelta
+        from passlib.context import CryptContext
+        SessionLocal = get_session_factory()
+        with SessionLocal() as db:
+            medicines = crud.get_medicines(db)
+            if not medicines:
+                logger.info("💊 Seeding medicine catalog with standard medications...")
+                crud.seed_medicine_catalog(db, MEDICINE_CATALOG)
+                logger.info("✅ Medicine catalog seeded with %d items.", len(MEDICINE_CATALOG))
+                medicines = crud.get_medicines(db)
+
+            # Ensure default pharmacy user exists
+            pharmacies = crud.get_users_by_role(db, "pharmacy")
+            if not pharmacies:
+                pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+                pharm_user = crud.create_user(
+                    db,
+                    username="pharmacy",
+                    hashed_password=pwd_context.hash("pharmacy123"),
+                    role="pharmacy",
+                    full_name="MedRitt Central Pharmacy",
+                    email="pharmacy@medritt.ai",
+                    phone="+91-800-PHARMACY",
+                )
+                pharmacies = [pharm_user]
+                logger.info("✅ Default pharmacy account initialized.")
+
+            # Seed initial stock for common medicines if inventory is empty
+            pharmacy_id = pharmacies[0].id
+            inv = crud.get_inventory(db, pharmacy_id)
+            if not inv and medicines:
+                logger.info("📦 Seeding initial stock for pharmacy store inventory...")
+                for med in medicines[:30]:
+                    crud.restock_inventory(
+                        db,
+                        pharmacy_id=pharmacy_id,
+                        medicine_id=med.id,
+                        quantity=100,
+                        created_by_user_id=pharmacy_id,
+                        expiry_date=date.today() + timedelta(days=365),
+                    )
+                logger.info("✅ Pharmacy inventory seeded with initial stock.")
+    except Exception as seed_exc:
+        logger.warning(f"Catalog seeding note: {seed_exc}")
+
+    # 3. Load ML models
 
     # 4. Load ML models
     logger.info("🧠 Loading ML models...")
@@ -73,20 +119,19 @@ async def lifespan(app: FastAPI):
         groq_api_key=settings.GROQ_API_KEY,
         groq_model=settings.SCAN_TYPE_GROQ_MODEL,
     )
+    app.state.scan_verifier = app.state.scan_type_verifier
     logger.info("  ✅ Strict pre-inference scan type verification ready.")
 
     # 7. Initialize LLM Report Engine
     from services.llm_report_engine import LLMReportEngine
     app.state.report_engine = LLMReportEngine(
-        maira_api_url=settings.MAIRA_API_URL,
-        maira_timeout_seconds=settings.MAIRA_TIMEOUT_SECONDS,
         gemini_api_key=settings.GEMINI_API_KEY,
         gemini_model=settings.GEMINI_MODEL,
         sarvam_api_key=settings.SARVAM_API_KEY,
         sarvam_translate_model=settings.SARVAM_TRANSLATE_MODEL,
         groq_api_key=settings.GROQ_API_KEY,
-        anthropic_api_key=settings.ANTHROPIC_API_KEY,
-        openai_api_key=settings.OPENAI_API_KEY,
+        nvidia_api_key=settings.NVIDIA_API_KEY,
+        nvidia_model=settings.NVIDIA_MODEL,
     )
     logger.info("  ✅ Clinical report and patient-language services ready.")
 
@@ -94,6 +139,11 @@ async def lifespan(app: FastAPI):
     from services.pdf_generator import PDFGenerator
     app.state.pdf_generator = PDFGenerator()
     logger.info("  ✅ PDF Generator ready.")
+
+    # 9. Initialize AI Orchestrator (Phase 16)
+    from services.ai_orchestrator import create_orchestrator
+    app.state.orchestrator = create_orchestrator(app.state)
+    logger.info("  ✅ AI Orchestrator initialized and ready.")
 
     logger.info("=" * 60)
     logger.info("MedRittAI backend is ready. Local frontend: http://localhost:5173")
@@ -105,68 +155,6 @@ async def lifespan(app: FastAPI):
     app.state.report_engine.close()
     logger.info("🛑 MedRittAI shutting down.")
 
-
-def _seed_hospital_demo():
-    """Seed departments and deterministic multi-role hackathon accounts."""
-    from passlib.context import CryptContext
-    from medicine_catalog import MEDICINE_CATALOG
-
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    SessionLocal = get_session_factory()
-    db = SessionLocal()
-
-    try:
-        department_specs = [
-            ("General Medicine", "Primary consultation and coordinated care", "✦"),
-            ("Neurology", "Brain and nervous system care", "◉"),
-            ("Pulmonology", "Respiratory and lung care", "◌"),
-            ("Nephrology", "Kidney and renal care", "◇"),
-            ("Radiology", "Medical imaging and diagnostic services", "⌁"),
-        ]
-        departments = {
-            name: crud.get_or_create_department(db, name, description, icon)
-            for name, description, icon in department_specs
-        }
-        demo_users = [
-            (settings.DEMO_USER, settings.DEMO_PASSWORD, "doctor", "Demo Clinician", "MBBS, MD (Medicine)", "Internal Medicine", "General Medicine"),
-            ("patient", "patient123", "patient", "Amit Patient", "", "", None),
-            ("dr.sharma", "doctor123", "doctor", "Dr. Priya Sharma", "MBBS, MD (Medicine)", "Internal Medicine", "General Medicine"),
-            ("dr.patel", "doctor123", "doctor", "Dr. Rajesh Patel", "MBBS, DM (Neurology)", "Neurologist", "Neurology"),
-            ("dr.kumar", "doctor123", "doctor", "Dr. Anil Kumar", "MBBS, MD (Pulmonary Medicine)", "Pulmonologist", "Pulmonology"),
-            ("dr.singh", "doctor123", "doctor", "Dr. Manpreet Singh", "MBBS, DM (Nephrology)", "Nephrologist", "Nephrology"),
-            ("lab.tech", "lab123", "lab_tech", "Ravi Technician", "", "Diagnostic Imaging", "Radiology"),
-            ("pharmacy", "pharmacy123", "pharmacy", "MedRitt Care Pharmacy", "", "Ground Floor · MedRitt Hospital", None),
-            ("admin", "admin123", "admin", "MedRitt Administrator", "", "Hospital Operations", None),
-        ]
-        for username, password, role, full_name, qualification, specialization, department_name in demo_users:
-            department_id = departments[department_name].id if department_name else None
-            existing = crud.get_user_by_username(db, username)
-            if existing:
-                existing.role = role
-                existing.full_name = existing.full_name or full_name
-                existing.specialization = existing.specialization or specialization
-                existing.qualification = existing.qualification or qualification
-                existing.department_id = existing.department_id or department_id
-            else:
-                crud.create_user(
-                    db,
-                    username=username,
-                    hashed_password=pwd_context.hash(password),
-                    role=role,
-                    full_name=full_name,
-                    specialization=specialization,
-                    qualification=qualification,
-                    department_id=department_id,
-                )
-            if role == "pharmacy":
-                existing = crud.get_user_by_username(db, username)
-                existing.email = existing.email or "pharmacy@medritt.local"
-                existing.phone = existing.phone or "+91 98765 43210"
-        crud.seed_medicine_catalog(db, MEDICINE_CATALOG)
-        crud.link_legacy_prescriptions_to_catalog(db)
-        db.commit()
-    finally:
-        db.close()
 
 
 # ============================================================
@@ -219,11 +207,12 @@ async def health_check():
 # REGISTER ROUTERS
 # ============================================================
 
-from routers import appointment, auth, case_study, diagnostic, doctors, history, pharmacy, prescription, report, scan
+from routers import appointment, auth, case_study, diagnostic, doctor_reports, doctors, history, pharmacy, prescription, report, scan
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(scan.router, prefix="/api/v1/scan", tags=["Scan"])
 app.include_router(report.router, prefix="/api/v1/report", tags=["Report"])
+app.include_router(doctor_reports.router, prefix="/api/v1/reports", tags=["Doctor Reports"])
 app.include_router(history.router, prefix="/api/v1/history", tags=["History"])
 app.include_router(doctors.router, prefix="/api/v1", tags=["Hospital Directory"])
 app.include_router(appointment.router, prefix="/api/v1/appointments", tags=["Appointments"])

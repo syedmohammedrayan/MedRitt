@@ -143,3 +143,106 @@ async def admin_delete_doctor(
     db.commit()
     db.refresh(doctor)
     return doctor_payload(doctor)
+
+
+from models.schemas import LabTechCreate, PharmacyStaffCreate, UserSummary
+
+@router.get("/admin/lab-techs", response_model=list[UserSummary])
+async def admin_list_lab_techs(db: Session = Depends(get_db), _admin=Depends(require_roles("admin"))):
+    return [serialize_user(u) for u in crud.get_users_by_role(db, "lab_tech")]
+
+@router.post("/admin/lab-techs", response_model=UserSummary, status_code=201)
+async def admin_create_lab_tech(
+    payload: LabTechCreate,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_roles("admin")),
+):
+    username = payload.username.strip().lower()
+    if crud.get_user_by_username(db, username):
+        raise HTTPException(status_code=400, detail="Username already registered")
+
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    user = crud.create_user(
+        db,
+        username=username,
+        hashed_password=pwd_context.hash(payload.password),
+        role="lab_tech",
+        full_name=payload.full_name,
+        email=payload.email,
+        phone=payload.phone
+    )
+    return serialize_user(user)
+
+@router.delete("/admin/lab-techs/{user_id}", response_model=UserSummary)
+async def admin_delete_lab_tech(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_roles("admin")),
+):
+    user = crud.get_user(db, user_id)
+    if not user or user.role != "lab_tech":
+        raise HTTPException(status_code=404, detail="Lab Tech not found")
+    user.is_active = False
+    db.commit()
+    db.refresh(user)
+    return serialize_user(user)
+
+
+# ============================================================
+# PHARMACY / CHEMIST STAFF ADMIN
+# ============================================================
+
+@router.get("/admin/pharmacy-staff", response_model=list[UserSummary])
+@router.get("/admin/pharmacy", response_model=list[UserSummary])
+async def admin_list_pharmacy_staff(db: Session = Depends(get_db), _admin=Depends(require_roles("admin"))):
+    return [serialize_user(u) for u in crud.get_users_by_role(db, "pharmacy")]
+
+
+@router.post("/admin/pharmacy-staff", response_model=UserSummary, status_code=201)
+@router.post("/admin/pharmacy", response_model=UserSummary, status_code=201)
+async def admin_create_pharmacy_staff(
+    payload: PharmacyStaffCreate,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_roles("admin")),
+):
+    username = payload.username.strip().lower()
+    if crud.get_user_by_username(db, username):
+        raise HTTPException(status_code=400, detail="Username already registered")
+
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    user = crud.create_user(
+        db,
+        username=username,
+        hashed_password=pwd_context.hash(payload.password),
+        role="pharmacy",
+        full_name=payload.full_name,
+        email=payload.email,
+        phone=payload.phone
+    )
+    return serialize_user(user)
+
+
+@router.delete("/admin/pharmacy-staff/{user_id}", response_model=UserSummary)
+@router.delete("/admin/pharmacy/{user_id}", response_model=UserSummary)
+async def admin_delete_pharmacy_staff(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_roles("admin")),
+):
+    user = crud.get_user(db, user_id)
+    if not user or user.role != "pharmacy":
+        raise HTTPException(status_code=404, detail="Pharmacy staff not found")
+    user.is_active = False
+    db.commit()
+    db.refresh(user)
+    return serialize_user(user)
+
+
+@router.post("/admin/seed-medicines")
+async def admin_seed_medicines(db: Session = Depends(get_db), _admin=Depends(require_roles("admin"))):
+    from medicine_catalog import MEDICINE_CATALOG
+    crud.seed_medicine_catalog(db, MEDICINE_CATALOG)
+    count = len(crud.get_medicines(db))
+    return {"message": "Medicine catalog seeded successfully", "total_medicines": count}

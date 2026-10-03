@@ -187,6 +187,8 @@ async def finalize_case_study(
     case_study.status = "final"
     case_study.finalized_at = datetime.now(timezone.utc)
     case_study.finalized_by_doctor_id = current_user.id
+    if case_study.appointment:
+        crud.update_appointment_status(db, case_study.appointment, "completed")
     db.commit()
     db.refresh(case_study)
     return _case_payload(case_study)

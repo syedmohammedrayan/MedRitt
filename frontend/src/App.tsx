@@ -6,20 +6,37 @@ import CaseStudyView from './pages/CaseStudyView';
 import ConsultationPage from './pages/ConsultationPage';
 import DoctorDashboard from './pages/DoctorDashboard';
 import DoctorAdminPage from './pages/DoctorAdminPage';
+import DoctorReportsPage from './pages/DoctorReportsPage';
+import LabAdminPage from './pages/LabAdminPage';
 import LabDashboard from './pages/LabDashboard';
 import LabUploadScan from './pages/LabUploadScan';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import PatientDashboard from './pages/PatientDashboard';
+import PatientReportsPage from './pages/PatientReportsPage';
+import PatientPrescriptionsPage from './pages/PatientPrescriptionsPage';
 import PharmacyBillPage from './pages/PharmacyBillPage';
 import PharmacyDashboard from './pages/PharmacyDashboard';
 import PharmacyInventoryPage from './pages/PharmacyInventoryPage';
 import RegisterPage from './pages/RegisterPage';
+import PharmacyAdminPage from './pages/PharmacyAdminPage';
 import ResultsPage from './pages/ResultsPage';
 import UploadPage from './pages/UploadPage';
 import type { UserRole } from './types';
 import BrandLogo from './components/BrandLogo';
+import SecurityQuestionsForm from './components/SecurityQuestionsForm';
 import { apiAssetUrl, updateMe, uploadProfileAvatar } from './api/client';
+
+function getProfileLabel(role: UserRole): string {
+  switch (role) {
+    case 'doctor': return 'DOCTOR PROFILE';
+    case 'patient': return 'PATIENT PROFILE';
+    case 'lab_tech': return 'LAB PROFILE';
+    case 'pharmacy': return 'PHARMACY PROFILE';
+    case 'admin': return 'ADMIN PROFILE';
+    default: return 'PROFILE';
+  }
+}
 
 const homeByRole: Record<UserRole, string> = {
   patient: '/patient/dashboard',
@@ -49,11 +66,13 @@ function Brand() {
 const navByRole: Record<UserRole, Array<{ path: string; label: string; icon: string }>> = {
   patient: [
     { path: '/patient/dashboard', label: 'My care', icon: '⌂' },
+    { path: '/patient/reports', label: 'Reports track', icon: 'Rp' },
+    { path: '/patient/prescriptions', label: 'Medicines & pharmacy', icon: 'Rx' },
     { path: '/patient/book-appointment', label: 'Book appointment', icon: '＋' },
   ],
   doctor: [
     { path: '/doctor/dashboard', label: 'Clinical queue', icon: '⌂' },
-    { path: '/upload', label: 'Direct analysis', icon: '⌁' },
+    { path: '/doctor/reports', label: 'Reports', icon: 'Rp' },
   ],
   lab_tech: [
     { path: '/lab/dashboard', label: 'Lab worklist', icon: '⌂' },
@@ -65,6 +84,8 @@ const navByRole: Record<UserRole, Array<{ path: string; label: string; icon: str
   ],
   admin: [
     { path: '/admin/doctors', label: 'Doctors admin', icon: 'Dr' },
+    { path: '/admin/lab-techs', label: 'Lab tech admin', icon: 'Lb' },
+    { path: '/admin/pharmacy', label: 'Chemist admin', icon: 'Rx' },
     { path: '/doctor/dashboard', label: 'Clinical operations', icon: '⌂' },
     { path: '/pharmacy/inventory', label: 'Pharmacy store', icon: '▦' },
     { path: '/upload', label: 'Direct analysis', icon: '⌁' },
@@ -97,7 +118,8 @@ function Navigation({ collapsed, onToggle }: { collapsed: boolean; onToggle: () 
 }
 
 function AccountMenu() {
-  const { setCurrentUser, user } = useAuth();
+  const { setCurrentUser, user, logout } = useAuth();
+  const navigate = useNavigate();
   const fileInput = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [profile, setProfile] = useState({ full_name: user?.full_name || '', email: user?.email || '', phone: user?.phone || '' });
@@ -119,18 +141,28 @@ function AccountMenu() {
   };
   return <div className="account-menu">
     <button className="account-trigger" onClick={() => { setProfile({ full_name: user.full_name, email: user.email, phone: user.phone }); setOpen((value) => !value); }} aria-expanded={open}>
-      <span className="doctor-avatar">{user.avatar_url ? <img src={apiAssetUrl(user.avatar_url)} alt="" /> : user.full_name.slice(0, 1)}</span><span><small>Patient profile</small><strong>{user.full_name}</strong></span><b>⌄</b>
+      <span className="doctor-avatar">{user.avatar_url ? <img src={apiAssetUrl(user.avatar_url)} alt="" /> : user.full_name.slice(0, 1)}</span><span><small>{getProfileLabel(user.role)}</small><strong>{user.full_name}</strong></span><b>⌄</b>
     </button>
-    {open && <form className="account-panel" onSubmit={saveProfile}>
-      <header><div><small>Account</small><strong>Profile settings</strong></div><button type="button" onClick={() => setOpen(false)} aria-label="Close profile">×</button></header>
-      <button type="button" className="profile-photo-control" onClick={() => fileInput.current?.click()} disabled={saving}><span className="doctor-avatar">{user.avatar_url ? <img src={apiAssetUrl(user.avatar_url)} alt="" /> : user.full_name.slice(0, 1)}</span><span>Update profile picture<small>JPG, PNG or WebP · max 5 MB</small></span></button>
-      <input ref={fileInput} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={changeAvatar} />
-      <label><span>Name</span><input value={profile.full_name} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} required /></label>
-      <label><span>Phone number</span><input type="tel" value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label>
-      <label><span>Email</span><input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label>
-      {error && <p className="account-panel__error">{error}</p>}
-      <button className="button button--primary button--wide" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
-    </form>}
+    {open && (
+      <div className="account-panel" style={{ maxHeight: '85vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
+        <header style={{ marginBottom: '16px' }}><div><small>Account</small><strong>Profile settings</strong></div><button type="button" onClick={() => setOpen(false)} aria-label="Close profile">×</button></header>
+
+        <form onSubmit={saveProfile} style={{ display: 'grid', gap: '12px' }}>
+          <button type="button" className="profile-photo-control" onClick={() => fileInput.current?.click()} disabled={saving}><span className="doctor-avatar">{user.avatar_url ? <img src={apiAssetUrl(user.avatar_url)} alt="" /> : user.full_name.slice(0, 1)}</span><span>Update profile picture<small>JPG, PNG or WebP · max 5 MB</small></span></button>
+          <input ref={fileInput} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={changeAvatar} />
+          <label><span>Name</span><input value={profile.full_name} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} required /></label>
+          <label><span>Phone number</span><input type="tel" value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label>
+          <label><span>Email</span><input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label>
+          {error && <p className="account-panel__error">{error}</p>}
+          <button className="button button--primary button--wide" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+        </form>
+
+        <SecurityQuestionsForm />
+
+        <hr style={{ margin: '16px 0', border: 'none', borderBottom: '1px solid var(--line)' }} />
+        <button type="button" className="button button--outline button--wide" onClick={() => { logout(); navigate('/login'); }} style={{ color: '#a43326' }}>Sign out</button>
+      </div>
+    )}
   </div>;
 }
 
@@ -158,12 +190,19 @@ function ApplicationFrame() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/patient/dashboard" element={<ProtectedRoute roles={['patient']}><PatientDashboard /></ProtectedRoute>} />
+          <Route path="/patient/reports" element={<ProtectedRoute roles={['patient']}><PatientReportsPage /></ProtectedRoute>} />
+          <Route path="/patient/prescriptions" element={<ProtectedRoute roles={['patient']}><PatientPrescriptionsPage /></ProtectedRoute>} />
           <Route path="/patient/book-appointment" element={<ProtectedRoute roles={['patient']}><BookAppointment /></ProtectedRoute>} />
           <Route path="/patient/case-study/:caseStudyId" element={<ProtectedRoute roles={['patient']}><CaseStudyView /></ProtectedRoute>} />
+          <Route path="/patient/case study/:caseStudyId" element={<ProtectedRoute roles={['patient']}><CaseStudyView /></ProtectedRoute>} />
           <Route path="/doctor/dashboard" element={<ProtectedRoute roles={['doctor', 'admin']}><DoctorDashboard /></ProtectedRoute>} />
+          <Route path="/doctor/reports" element={<ProtectedRoute roles={['doctor', 'admin']}><DoctorReportsPage /></ProtectedRoute>} />
+          <Route path="/admin/lab-techs" element={<ProtectedRoute roles={['admin']}><LabAdminPage /></ProtectedRoute>} />
           <Route path="/admin/doctors" element={<ProtectedRoute roles={['admin']}><DoctorAdminPage /></ProtectedRoute>} />
+          <Route path="/admin/pharmacy" element={<ProtectedRoute roles={['admin']}><PharmacyAdminPage /></ProtectedRoute>} />
           <Route path="/doctor/consultation/:appointmentId" element={<ProtectedRoute roles={['doctor', 'admin']}><ConsultationPage /></ProtectedRoute>} />
           <Route path="/doctor/case-study/:caseStudyId" element={<ProtectedRoute roles={['doctor', 'admin']}><CaseStudyView /></ProtectedRoute>} />
+          <Route path="/doctor/case study/:caseStudyId" element={<ProtectedRoute roles={['doctor', 'admin']}><CaseStudyView /></ProtectedRoute>} />
           <Route path="/lab/dashboard" element={<ProtectedRoute roles={['lab_tech', 'admin']}><LabDashboard /></ProtectedRoute>} />
           <Route path="/lab/upload/:orderId" element={<ProtectedRoute roles={['lab_tech', 'admin']}><LabUploadScan /></ProtectedRoute>} />
           <Route path="/lab/results/:scanId" element={<ProtectedRoute roles={['lab_tech', 'admin']}><ResultsPage /></ProtectedRoute>} />

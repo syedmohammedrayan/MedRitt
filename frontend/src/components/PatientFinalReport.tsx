@@ -20,13 +20,16 @@ const detailSections: Array<{ key: keyof ReportData; title: string }> = [
   { key: 'critical_communication', title: 'Communication' },
 ];
 
+type ReportImageViewMode = 'both' | 'heatmap' | 'original';
+
 export default function PatientFinalReport({ scanId, report, heatmapUrl, overlayUrl, originalImageUrl }: PatientFinalReportProps) {
   const [downloading, setDownloading] = useState(false);
-  const [imageMode, setImageMode] = useState<'heatmap' | 'original'>('heatmap');
+  const [imageMode, setImageMode] = useState<ReportImageViewMode>('both');
   const [error, setError] = useState('');
 
   const validOverlay = overlayUrl || heatmapUrl || originalImageUrl;
   const isDetection = !!overlayUrl;
+  const attributionLabel = isDetection ? 'Detection overlay' : 'Grad-CAM heatmap';
 
   const download = async () => {
     setDownloading(true);
@@ -56,16 +59,64 @@ export default function PatientFinalReport({ scanId, report, heatmapUrl, overlay
         <div className="patient-final-grid">
           <article className="patient-heatmap-card">
             <div className="patient-heatmap-card__heading">
-              <div><span>Reviewed image</span><strong>{imageMode === 'heatmap' ? (isDetection ? 'Detection overlay' : 'AI heatmap') : 'Original scan'}</strong></div>
+              <div>
+                <span>Reviewed image</span>
+                <strong>
+                  {imageMode === 'both'
+                    ? `${attributionLabel} (Left) & Original scan (Right)`
+                    : imageMode === 'heatmap'
+                    ? attributionLabel
+                    : 'Original scan'}
+                </strong>
+              </div>
               <div className="patient-image-toggle" role="group" aria-label="Report image view">
-                <button className={imageMode === 'heatmap' ? 'active' : ''} onClick={() => setImageMode('heatmap')}>{isDetection ? 'Overlay' : 'Heatmap'}</button>
+                <button className={imageMode === 'both' ? 'active' : ''} onClick={() => setImageMode('both')}>Both scans</button>
+                <button className={imageMode === 'heatmap' ? 'active' : ''} onClick={() => setImageMode('heatmap')}>{isDetection ? 'Overlay' : 'Grad-CAM'}</button>
                 <button className={imageMode === 'original' ? 'active' : ''} onClick={() => setImageMode('original')}>Original</button>
               </div>
             </div>
-            <figure>
-              <img src={imageMode === 'heatmap' ? validOverlay : originalImageUrl} alt={imageMode === 'heatmap' ? 'AI markup included in the final report' : 'Original diagnostic scan'} />
-              <figcaption>{imageMode === 'heatmap' ? (isDetection ? 'Bounding box detections.' : `Highlighted model attention for ${report.heatmap_target_label || report.top_label || 'the primary finding'}.`) : 'Original diagnostic image supplied for this report.'}</figcaption>
-            </figure>
+
+            {imageMode === 'both' ? (
+              <div className="patient-dual-scans">
+                {/* Left side: Grad-CAM */}
+                <figure className="patient-scan-panel">
+                  <div className="patient-scan-panel__heading">
+                    <span>AI Attribution (Left)</span>
+                    <strong>{attributionLabel}</strong>
+                  </div>
+                  <img src={validOverlay} alt={attributionLabel} />
+                  <figcaption>
+                    {isDetection
+                      ? 'Identified pathology / fracture bounding overlay.'
+                      : `Highlighted model attention for ${report.heatmap_target_label || report.top_label || 'the primary finding'}.`}
+                  </figcaption>
+                </figure>
+
+                {/* Right side: Original scan */}
+                <figure className="patient-scan-panel">
+                  <div className="patient-scan-panel__heading">
+                    <span>Reference (Right)</span>
+                    <strong>Original diagnostic scan</strong>
+                  </div>
+                  <img src={originalImageUrl} alt="Original diagnostic scan" />
+                  <figcaption>Original unprocessed diagnostic scan supplied for this report.</figcaption>
+                </figure>
+              </div>
+            ) : (
+              <figure>
+                <img
+                  src={imageMode === 'heatmap' ? validOverlay : originalImageUrl}
+                  alt={imageMode === 'heatmap' ? attributionLabel : 'Original diagnostic scan'}
+                />
+                <figcaption>
+                  {imageMode === 'heatmap'
+                    ? (isDetection
+                      ? 'Bounding box detections.'
+                      : `Highlighted model attention for ${report.heatmap_target_label || report.top_label || 'the primary finding'}.`)
+                    : 'Original diagnostic image supplied for this report.'}
+                </figcaption>
+              </figure>
+            )}
           </article>
 
           <div className="patient-conclusion-stack">

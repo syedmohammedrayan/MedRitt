@@ -74,7 +74,7 @@ Output ONLY valid JSON. No markdown, no code fences, no explanation, no extra te
 class LLMReportEngine:
     """
     Generates clinical reports using LLM APIs.
-    
+
     Tries providers in priority order:
     1. MAIRA-2 — chest X-ray report generation
     2. Gemini — image-aware multimodal reporting
@@ -86,47 +86,38 @@ class LLMReportEngine:
 
     def __init__(
         self,
-        maira_api_url: Optional[str] = None,
-        maira_timeout_seconds: float = 35.0,
         gemini_api_key: Optional[str] = None,
-        gemini_model: str = "gemini-3-flash-preview",
+        gemini_model: str = "gemini-3.8-flash",
         sarvam_api_key: Optional[str] = None,
         sarvam_translate_model: str = "sarvam-translate:v1",
         groq_api_key: Optional[str] = None,
-        anthropic_api_key: Optional[str] = None,
-        openai_api_key: Optional[str] = None,
+        nvidia_api_key: Optional[str] = None,
+        nvidia_model: str = "nvidia/nemotron-3.5-lightning-30b-a3b",
     ):
-        self.maira_api_url = maira_api_url.rstrip("/") if maira_api_url else None
-        self.maira_timeout_seconds = maira_timeout_seconds
         self.gemini_key = gemini_api_key
         self.gemini_model = gemini_model
-        self.gemini_models = list(dict.fromkeys([
-            gemini_model,
-            "gemini-flash-lite-latest",
-            "gemini-flash-latest",
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-        ]))
+
         self.sarvam_key = sarvam_api_key
         self.sarvam_translate_model = sarvam_translate_model
         self.sarvam_translation_disabled = False
         self.groq_key = groq_api_key
-        self.anthropic_key = anthropic_api_key
-        self.openai_key = openai_api_key
-        self._gemini_http_client = None
-        self._gemini_client_lock = threading.Lock()
+
+        from .gemini_service import GeminiService
+        self.gemini_service = GeminiService(api_key=self.gemini_key, model=self.gemini_model) if self.gemini_key else None
+
+        from .groq_service import GroqService
+        self.groq_service = GroqService(api_key=self.groq_key) if self.groq_key else None
+
+        from .nvidia_service import NVIDIAService
+        self.nvidia_service = NVIDIAService(api_key=nvidia_api_key, model=nvidia_model) if nvidia_api_key else None
 
         providers = []
-        if self.maira_api_url:
-            providers.append("maira-2")
         if self.gemini_key:
             providers.append("gemini")
         if self.groq_key:
             providers.append("groq")
-        if self.anthropic_key:
-            providers.append("claude")
-        if self.openai_key:
-            providers.append("openai")
+        if nvidia_api_key:
+            providers.append("nvidia")
         if not providers:
             providers.append("template (fallback)")
 
@@ -136,30 +127,23 @@ class LLMReportEngine:
             "configured" if self.sarvam_key else "local fallback",
         )
 
-    def _get_gemini_http_client(self):
-        """Return a reusable client so DNS/TLS setup is not repeated per report."""
-        if self._gemini_http_client is None:
-            with self._gemini_client_lock:
-                if self._gemini_http_client is None:
-                    import httpx
-
-                    self._gemini_http_client = httpx.Client(
-                        limits=httpx.Limits(
-                            max_connections=5,
-                            max_keepalive_connections=2,
-                            keepalive_expiry=60.0,
-                        )
-                    )
-        return self._gemini_http_client
 
     def close(self) -> None:
         """Release reusable network resources during application shutdown."""
-        if self._gemini_http_client is not None:
-            self._gemini_http_client.close()
-            self._gemini_http_client = None
+        pass
 
     def _build_user_prompt(self, result, scan_type: str) -> str:
         """Build the clinical context prompt from model output."""
+        if isinstance(result, dict):
+            from types import SimpleNamespace
+            result = SimpleNamespace(
+                top_label=result.get("top_label") or "Diagnostic finding",
+                confidence=float(result.get("confidence") or 0.0),
+                all_scores=result.get("all_scores") or {},
+                bounding_boxes=result.get("bounding_boxes") or result.get("detections") or [],
+                task_type=result.get("task_type") or ("detection" if scan_type in {"brain_tumor", "bone_fracture"} else "classification"),
+                severity=result.get("severity"),
+            )
         if scan_type == "chest_xray":
             # Format all scores for context
             supported_scores = [
@@ -336,84 +320,114 @@ Generate a structured diagnostic report."""
         result,
         scan_type: str,
         modality: str = "X-ray",
-        patient_id: str = "DEMO-001",
+        patient_id: str = "P-",
         image=None,
     ) -> dict:
-        """
-        Generate a full clinical report using the best available LLM provider.
-        
-        Args:
-            result: ClassificationResult or BrainClassificationResult
-            scan_type: "chest_xray" or "brain_mri"
-            modality: Imaging modality string
-            patient_id: Patient identifier
-            image: Optional PIL image for multimodal report providers
-            
-        Returns:
-            Complete report dictionary with all fields
-        """
+        if isinstance(result, dict):
+            from types import SimpleNamespace
+            result = SimpleNamespace(
+                top_label=result.get("top_label") or "Diagnostic finding",
+                confidence=float(result.get("confidence") or 0.0),
+                all_scores=result.get("all_scores") or {},
+                bounding_boxes=result.get("bounding_boxes") or result.get("detections") or [],
+                task_type=result.get("task_type") or ("detection" if scan_type in {"brain_tumor", "bone_fracture"} else "classification"),
+                severity=result.get("severity"),
+                heatmap_target_label=result.get("heatmap_target_label"),
+            )
         report_started = time.perf_counter()
         user_prompt = self._build_user_prompt(result, scan_type)
         llm_report = None
         llm_provider = "template"
 
-        # Try providers in order
-        if self.maira_api_url and scan_type == "chest_xray" and image is not None:
-            llm_report = await self._call_maira(image)
-            if llm_report:
-                llm_provider = "maira-2"
+        if self.gemini_service and image is not None:
+            try:
+                import io
+                image_rgb = image.convert("RGB")
+                buffer = io.BytesIO()
+                image_rgb.save(buffer, format="JPEG", quality=90)
+                image_bytes = buffer.getvalue()
 
-        if self.gemini_key and image is not None:
-            if llm_report is None:
-                llm_report = await self._call_gemini(user_prompt, image)
-                if llm_report:
+                prompt = f"{SYSTEM_PROMPT}\n\nADDITIONAL SAFETY REQUIREMENTS:\n- This output is an unsigned preliminary draft for clinician verification.\n- If the image does not match the selected scan type, state that the image is not suitable for this workflow.\n- Use the uploaded image for clinical observations. Never expose the classifier, its confidence, model agreement, or concordance in the report prose.\n- For brain MRI, contrast status and pulse sequence are unknown. Do not call a lesion enhancing or make diffusion-, ADC-, FLAIR-, T1-, T2-, susceptibility-, or perfusion-specific claims.\n- Return only the required JSON object.\n\n{user_prompt}"
+
+                report_obj = await self.gemini_service.generate_structured_report(prompt, image_bytes)
+                if report_obj:
+                    llm_report = report_obj.model_dump()
                     llm_provider = "gemini"
+                    logger.info("Report generated successfully using Gemini.")
+            except Exception as gemini_err:
+                logger.warning("Gemini report generation failed: %s. Trying Groq fallback...", gemini_err)
 
-        if llm_report is None and self.groq_key:
-            llm_report = await self._call_groq(user_prompt)
-            if llm_report:
-                llm_provider = "groq"
+        # Groq Fallback
+        if llm_report is None and self.groq_service:
+            try:
+                groq_prompt = f"{SYSTEM_PROMPT}\n\nOutput strictly valid JSON with keys: technique, comparison, image_quality, findings, impression, differential_diagnosis, recommendations, critical_communication, patient_explanation.\n\n{user_prompt}"
+                groq_data = await asyncio.to_thread(self.groq_service.generate_report, groq_prompt)
+                if groq_data and isinstance(groq_data, dict):
+                    llm_report = groq_data
+                    llm_provider = "groq"
+                    logger.info("Report generated successfully using Groq fallback.")
+            except Exception as groq_err:
+                logger.warning("Groq report generation failed: %s. Trying NVIDIA fallback...", groq_err)
 
-        if llm_report is None and self.anthropic_key:
-            llm_report = await self._call_claude(user_prompt)
-            if llm_report:
-                llm_provider = "claude"
+        # NVIDIA Fallback
+        if llm_report is None and self.nvidia_service:
+            try:
+                nv_prompt = f"{SYSTEM_PROMPT}\n\nOutput strictly valid JSON with keys: technique, comparison, image_quality, findings, impression, differential_diagnosis, recommendations, critical_communication, patient_explanation.\n\n{user_prompt}"
+                nv_data = await asyncio.to_thread(self.nvidia_service.generate_report, nv_prompt)
+                if nv_data and isinstance(nv_data, dict):
+                    llm_report = nv_data
+                    llm_provider = "nvidia"
+                    logger.info("Report generated successfully using NVIDIA NIM fallback.")
+            except Exception as nv_err:
+                logger.warning("NVIDIA report generation failed: %s.", nv_err)
 
-        if llm_report is None and self.openai_key:
-            llm_report = await self._call_openai(user_prompt)
-            if llm_report:
-                llm_provider = "openai"
+        nvidia_status = "unconfigured"
+        if llm_report is not None and llm_provider == "gemini" and self.nvidia_service:
+            import json
+            diag_dict = {
+                "top_label": result.top_label,
+                "confidence": getattr(result, "confidence", 0.0),
+                "all_scores": getattr(result, "all_scores", {}),
+                "task_type": getattr(result, "task_type", "classification")
+            }
+            if getattr(result, "task_type", None) == "detection":
+                diag_dict["bounding_boxes"] = getattr(result, "bounding_boxes", [])
+            qa_res = self.nvidia_service.verify_report(diag_dict, json.dumps(llm_report))
+            if qa_res is None:
+                nvidia_status = "unavailable"
+            else:
+                nvidia_status = "checked"
+                if not qa_res.passes or qa_res.recommendation.lower() == "flag":
+                    logger.warning(f"NVIDIA QA flagged report: {qa_res.issues}")
+                    llm_report = None
 
-        # Fallback to template if no LLM succeeded
         if llm_report is None:
             llm_report = self._generate_template_report(result, scan_type)
             llm_provider = "template"
+            nvidia_status = "bypassed"
         elif getattr(result, "task_type", "classification") == "classification" and not self._is_report_supported(
             llm_report,
             result,
-            allow_visual_details=(llm_provider in {"maira-2", "gemini"}),
+            allow_visual_details=(llm_provider in {"gemini"}),
         ):
             logger.warning("LLM report contained unsupported findings. Falling back to template.")
             llm_report = self._generate_template_report(result, scan_type)
             llm_provider = "template"
+            nvidia_status = "bypassed"
 
         llm_report = self._complete_report_sections(llm_report, scan_type)
         llm_report = self._ground_report_to_available_input(llm_report, scan_type)
 
-        # Build the full report
         now = datetime.now()
-
-        # Determine heatmap target and low-confidence flag
         is_low_confidence = getattr(result, "is_low_confidence", False)
         heatmap_target_label = getattr(result, "heatmap_target_label", result.top_label)
         secondary_findings = getattr(result, "secondary_findings", [])
 
-        # Model methodology description
         if scan_type == "chest_xray":
             methodology = (
                 "Classification was performed using the RAD-DINO ViT-B/14 chest-radiograph "
                 "foundation encoder with a local three-class downstream head trained for Normal, "
-                "Pneumonia, and Tuberculosis. The model processes 518×518 images and outputs a "
+                "Pneumonia, and Tuberculosis. The model processes 518x518 images and outputs a "
                 "mutually-exclusive softmax score distribution. "
                 "The accompanying heatmap uses the reference chest pipeline's lung-masked "
                 "image saliency visualization in the same resize and center-crop coordinate frame. "
@@ -425,10 +439,10 @@ Generate a structured diagnostic report."""
                 "Classification was performed using an EfficientNetB3 convolutional neural network "
                 "with ImageNet pretrained weights, fine-tuned via progressive 3-phase training "
                 "for 4-class brain tumor classification (Glioma, Meningioma, No Tumor, Pituitary). "
-                "Input images undergo brain contour cropping and are processed at 260×260 resolution. "
+                "Input images undergo brain contour cropping and are processed at 260x260 resolution. "
                 "Test-Time Augmentation (TTA) is applied at inference for improved accuracy. "
                 "Explainability was generated using class-logit Grad-CAM++ targeting "
-                "the top_activation layer (9×9). "
+                "the top_activation layer (9x9). "
                 "The heatmap represents actual gradient-weighted activations from the trained model."
             )
         elif scan_type == "skin_cancer":
@@ -480,6 +494,7 @@ Generate a structured diagnostic report."""
             "secondary_findings": secondary_findings,
             "methodology": methodology,
             "limitations": limitations,
+            "nvidia_qa_status": nvidia_status,
         }
         logger.info(
             "Clinical report generated via %s in %.0fms",
@@ -488,285 +503,26 @@ Generate a structured diagnostic report."""
         )
         return report_payload
 
-    async def _call_maira(self, image) -> Optional[dict]:
-        """Send a frontal chest image to MAIRA-2 and normalize its report."""
-        try:
-            import httpx
-
-            # Keep the radiograph lossless. Some MAIRA deployments reject or
-            # mishandle a JPEG re-encoding even when the source is a valid PNG.
-            buffer = io.BytesIO()
-            image.convert("RGB").save(buffer, format="PNG")
-            timeout = httpx.Timeout(
-                self.maira_timeout_seconds,
-                connect=min(8.0, self.maira_timeout_seconds),
-            )
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
-                    f"{self.maira_api_url}/generate",
-                    headers={"ngrok-skip-browser-warning": "true"},
-                    files={"frontal": ("frontal.png", buffer.getvalue(), "image/png")},
-                )
-                if response.is_error:
-                    raise RuntimeError(
-                        f"MAIRA-2 returned HTTP {response.status_code}: "
-                        f"{response.text[:1000]}"
-                    )
-                payload = response.json()
-
-            report = self._normalize_maira_response(payload)
-            logger.info("MAIRA-2 chest report generated successfully.")
-            return report
-        except Exception as exc:
-            logger.warning("MAIRA-2 report generation failed; using fallback pipeline: %s", exc)
-            return None
 
     @classmethod
-    def _normalize_maira_response(cls, payload) -> dict:
-        """Accept structured or plain-text response shapes used by MAIRA servers."""
-        if not isinstance(payload, dict):
-            raise ValueError("MAIRA-2 response must be a JSON object")
 
-        if payload.get("findings") and payload.get("impression"):
-            return cls._parse_json_report(json.dumps(payload))
 
-        text = next(
-            (
-                str(payload[key]).strip()
-                for key in ("report", "generated_report", "generated_text", "output", "text")
-                if payload.get(key)
-            ),
-            "",
-        )
-        if not text:
-            raise ValueError("MAIRA-2 response contained no report text")
 
-        findings_match = re.search(
-            r"(?is)\bfindings?\s*:\s*(.*?)(?=\n\s*(?:impression|conclusion)\s*:|$)",
-            text,
-        )
-        impression_match = re.search(
-            r"(?is)\b(?:impression|conclusion)\s*:\s*(.*)$",
-            text,
-        )
-        findings = findings_match.group(1).strip() if findings_match else text
-        impression = impression_match.group(1).strip() if impression_match else text
-        if not findings or not impression:
-            raise ValueError("MAIRA-2 returned an unusable report")
-        return {"findings": findings, "impression": impression}
 
-    async def _call_gemini(self, user_prompt: str, image) -> Optional[dict]:
-        """Call Gemini with inline image data for image-aware report generation."""
-        # Each HTTP attempt in the synchronous worker has its own strict timeout.
-        # Do not wrap the worker in asyncio.wait_for: cancelling a thread does not
-        # stop it, which previously let Gemini succeed after Groq had already run.
-        return await asyncio.to_thread(self._call_gemini_sync, user_prompt, image)
 
-    def _call_gemini_sync(self, user_prompt: str, image) -> Optional[dict]:
-        try:
-            import httpx
-
-            image_rgb = image.convert("RGB")
-            buffer = io.BytesIO()
-            image_rgb.save(buffer, format="JPEG", quality=90)
-            image_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-            prompt = f"""{SYSTEM_PROMPT}
-
-ADDITIONAL SAFETY REQUIREMENTS:
-- This output is an unsigned preliminary draft for clinician verification.
-- If the image does not match the selected scan type, state that the image is not suitable for this workflow.
-- Use the uploaded image for clinical observations. Never expose the classifier, its confidence, model agreement, or concordance in the report prose.
-- For brain MRI, contrast status and pulse sequence are unknown. Do not call a lesion enhancing or make diffusion-, ADC-, FLAIR-, T1-, T2-, susceptibility-, or perfusion-specific claims.
-- Return only the required JSON object.
-
-{user_prompt}"""
-
-            model_candidates = [
-                "gemini-flash-latest",
-                self.gemini_model,
-                "gemini-2.5-flash",
-            ]
-            seen = set()
-            model_candidates = [
-                m for m in model_candidates
-                if m and not (m in seen or seen.add(m))
-            ][:2]
-
-            last_error = None
-            for model_name in model_candidates:
-                try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
-                    payload = {
-                        "contents": [
-                            {
-                                "parts": [
-                                    {"text": prompt},
-                                    {
-                                        "inlineData": {
-                                            "mimeType": "image/jpeg",
-                                            "data": image_b64,
-                                        }
-                                    },
-                                ]
-                            }
-                        ],
-                        "generationConfig": {
-                            "temperature": 0,
-                            "responseMimeType": "application/json",
-                            "maxOutputTokens": 2048,
-                        },
-                    }
-                    response = self._get_gemini_http_client().post(
-                        url,
-                        headers={
-                            "x-goog-api-key": self.gemini_key,
-                            "Content-Type": "application/json",
-                        },
-                        json=payload,
-                        timeout=httpx.Timeout(
-                            18.0, connect=5.0, read=18.0, write=18.0, pool=5.0
-                        ),
-                    )
-
-                    if response.status_code >= 500 or response.status_code in {404, 429}:
-                        logger.warning(
-                            f"Gemini model {model_name} returned {response.status_code}: {response.text[:300]}"
-                        )
-                        continue
-                    response.raise_for_status()
-
-                    data = response.json()
-                    content = (
-                        data.get("candidates", [{}])[0]
-                        .get("content", {})
-                        .get("parts", [{}])[0]
-                        .get("text")
-                    )
-                    if not content:
-                        logger.warning(f"Gemini model {model_name} returned no text.")
-                        continue
-
-                    result = self._parse_json_report(content)
-                    logger.info(f"Gemini image-aware report generated successfully with {model_name}.")
-                    return result
-                except Exception as model_error:
-                    last_error = model_error
-                    logger.warning(f"Gemini model {model_name} failed: {model_error}")
-
-            if last_error:
-                raise last_error
-            return None
-
-        except Exception as e:
-            logger.warning(f"Gemini API call failed: {e}")
-            return None
-
-    async def _call_groq(self, user_prompt: str) -> Optional[dict]:
-        """Call Groq's OpenAI-compatible HTTP endpoint."""
-        try:
-            import httpx
-
-            async with httpx.AsyncClient(timeout=25.0) as client:
-                response = await client.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.groq_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": "llama-3.3-70b-versatile",
-                        "messages": [
-                            {"role": "system", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        "max_tokens": 1800,
-                        "temperature": 0.0,
-                        "response_format": {"type": "json_object"},
-                    },
-                )
-                response.raise_for_status()
-                content = response.json()["choices"][0]["message"]["content"]
-            result = self._parse_json_report(content)
-            logger.info("Groq report generated successfully.")
-            return result
-
-        except Exception as e:
-            logger.warning(f"Groq API call failed: {e}")
-            return None
-
-    async def _call_claude(self, user_prompt: str) -> Optional[dict]:
-        """Call Anthropic Claude API."""
-        try:
-            import httpx
-
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key": self.anthropic_key,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
-                    json={
-                        "model": "claude-3-haiku-20240307",
-                        "max_tokens": 1800,
-                        "system": SYSTEM_PROMPT,
-                        "messages": [{"role": "user", "content": user_prompt}],
-                        "temperature": 0,
-                    },
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    content = data["content"][0]["text"]
-                    # Strip markdown code fences if present
-                    content = content.strip()
-                    if content.startswith("```"):
-                        content = content.split("\n", 1)[1].rsplit("```", 1)[0]
-                    result = self._parse_json_report(content)
-                    logger.info("Claude report generated successfully.")
-                    return result
-
-        except Exception as e:
-            logger.warning(f"Claude API call failed: {e}")
-        return None
-
-    async def _call_openai(self, user_prompt: str) -> Optional[dict]:
-        """Call OpenAI's stable v1 Chat Completions HTTP endpoint."""
-        try:
-            import httpx
-
-            async with httpx.AsyncClient(timeout=25.0) as client:
-                response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.openai_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": "gpt-4o-mini",
-                        "messages": [
-                            {"role": "system", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        "max_tokens": 1800,
-                        "temperature": 0.0,
-                        "response_format": {"type": "json_object"},
-                    },
-                )
-                response.raise_for_status()
-                content = response.json()["choices"][0]["message"]["content"]
-            result = self._parse_json_report(content)
-            logger.info("OpenAI report generated successfully.")
-            return result
-
-        except Exception as e:
-            logger.warning(f"OpenAI API call failed: {e}")
-            return None
 
     def _generate_template_report(self, result, scan_type: str) -> dict:
         """Grounded fallback used when image-aware report generation is unavailable."""
+        if isinstance(result, dict):
+            from types import SimpleNamespace
+            result = SimpleNamespace(
+                top_label=result.get("top_label") or "Diagnostic finding",
+                confidence=float(result.get("confidence") or 0.0),
+                all_scores=result.get("all_scores") or {},
+                bounding_boxes=result.get("bounding_boxes") or result.get("detections") or [],
+                task_type=result.get("task_type") or ("detection" if scan_type in {"brain_tumor", "bone_fracture"} else "classification"),
+                severity=result.get("severity"),
+            )
         label = result.top_label
         score = float(result.confidence)
         secondary = [
@@ -1454,14 +1210,14 @@ RULES:
     ) -> str:
         """
         Generate a patient-friendly summary of the medical report.
-        
+
         Creates a grounded English explanation first, then translates that fixed
         text. Translation is deliberately separated from clinical generation.
-        
+
         Args:
             report_data: The full clinical report data dict
             language: Target language (e.g., "Hindi", "Tamil", "English")
-        
+
         Returns:
             Plain text patient-friendly summary string
         """
@@ -1548,43 +1304,10 @@ Preserve all four headings, meaning, uncertainty, paragraph order, and safety la
 Do not add, remove, summarize, diagnose, or explain anything. Output only the translation.
 
 {text}"""
-        return await self._generate_gemini_text(prompt, temperature=0.0, max_output_tokens=1400)
-
-    async def _generate_gemini_text(
-        self, prompt: str, temperature: float, max_output_tokens: int,
-    ) -> Optional[str]:
-        try:
-            import httpx
-
-            preferred_models = list(dict.fromkeys([
-                "gemini-flash-latest",
-                "gemini-2.5-flash",
-                self.gemini_model,
-            ]))
-            async with httpx.AsyncClient(timeout=12.0) as client:
-                for model_name in preferred_models[:2]:
-                    try:
-                        response = await client.post(
-                            f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent",
-                            headers={"x-goog-api-key": self.gemini_key, "Content-Type": "application/json"},
-                            json={
-                                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                                "generationConfig": {
-                                    "temperature": temperature,
-                                    "maxOutputTokens": max_output_tokens,
-                                },
-                            },
-                        )
-                        response.raise_for_status()
-                        data = response.json()
-                        output = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                        if output:
-                            return output
-                    except Exception as exc:
-                        logger.warning("Patient text generation attempt failed: %s", exc)
-        except Exception as exc:
-            logger.warning("Patient text service unavailable: %s", exc)
+        if self.gemini_service:
+            return await self.gemini_service.generate_text(prompt)
         return None
+
 
     @staticmethod
     def _chunk_translation_text(text: str, limit: int = 1900) -> list[str]:

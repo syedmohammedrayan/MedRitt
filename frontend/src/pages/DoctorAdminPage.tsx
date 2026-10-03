@@ -16,6 +16,7 @@ export default function DoctorAdminPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const load = async () => {
     const [doctorItems, departmentItems] = await Promise.all([getAdminDoctors(), getDepartments()]);
@@ -48,7 +49,7 @@ export default function DoctorAdminPage() {
       full_name: doctor.full_name,
       qualification: doctor.qualification,
       specialization: doctor.specialization,
-      department_id: doctor.department_id || undefined,
+      department_id: doctor.department_id || doctor.department?.id || undefined,
       email: doctor.email,
       phone: doctor.phone,
       availability_note: doctor.availability_note,
@@ -91,7 +92,27 @@ export default function DoctorAdminPage() {
           <label className="field"><span>Specialist in</span><input required placeholder="Internal Medicine" value={form.specialization} onChange={(event) => setForm({ ...form, specialization: event.target.value })} /></label>
           <label className="field"><span>Department</span><select required value={form.department_id} onChange={(event) => setForm({ ...form, department_id: Number(event.target.value) })}>{departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           <label className="field"><span>Login username</span><input required minLength={3} value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} /></label>
-          <label className="field"><span>Initial password</span><input required minLength={6} type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
+          <label className="field">
+            <span>Initial password</span>
+            <div className="password-input-wrapper" style={{ position: 'relative' }}>
+              <input
+                required
+                minLength={6}
+                type={showPassword ? "text" : "password"}
+                value={form.password}
+                onChange={(event) => setForm({ ...form, password: event.target.value })}
+                style={{ width: '100%', paddingRight: '40px' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: 0 }}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "👁️" : "👁️‍🗨️"}
+              </button>
+            </div>
+          </label>
           <label className="field"><span>Email</span><input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
           <label className="field"><span>Phone</span><input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
           <div className="flow-actions field--wide"><button className="button button--primary" disabled={busy || !form.department_id}>{busy ? 'Saving…' : 'Add doctor'}</button></div>
@@ -116,7 +137,7 @@ export default function DoctorAdminPage() {
                 </div>
               ) : (
                 <>
-                  <div className="doctor-admin-identity"><span className="profile-avatar">{doctor.full_name.charAt(0)}</span><div><strong>{doctor.full_name}</strong><span>{doctor.qualification || 'Qualification not set'}</span><small>{doctor.specialization} · {doctor.department?.name || 'No department'} · @{doctor.username}</small></div></div>
+                  <div className="doctor-admin-identity"><span className="profile-avatar">{doctor.full_name.charAt(0)}</span><div><strong>{doctor.full_name}</strong><span>{doctor.qualification || 'Qualification not set'}</span><small>{doctor.specialization} · {doctor.department?.name || doctor.department_name || 'No department'} · @{doctor.username}</small></div></div>
                   <span className={`status-pill ${doctor.is_active && doctor.is_available ? 'status-pill--available' : ''}`}>{!doctor.is_active ? 'Deactivated' : doctor.is_available ? 'Available' : 'Temporarily unavailable'}</span>
                   <p>{doctor.availability_note || (doctor.is_available ? 'Accepting patient appointments' : 'Not accepting appointments')}</p>
                   <div className="doctor-admin-actions"><button className="button" disabled={busy || !doctor.is_active} onClick={() => beginEdit(doctor)}>Edit details</button>{doctor.is_active ? <><button className="button" disabled={busy} onClick={() => toggleAvailability(doctor)}>{doctor.is_available ? 'Set unavailable' : 'Set available'}</button><button className="text-button text-button--danger" disabled={busy} onClick={() => deactivate(doctor)}>Delete doctor</button></> : <button className="button button--primary" disabled={busy} onClick={() => restore(doctor)}>Restore doctor</button>}</div>
