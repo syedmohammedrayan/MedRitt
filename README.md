@@ -6,9 +6,10 @@ MedRittAI is a multi-role hospital diagnostic workflow platform connecting patie
 
 ## Features
 
-- Chest X-ray multi-label classification using RAD-DINO with a 14-label CheXpert head
-- Four-class brain MRI classification with EfficientNetB3: Glioma, Meningioma, No Tumor, and Pituitary
-- Five-class lung CT classification and kidney ultrasound stone screening using the bundled PyTorch models
+- Multi-class Skin Cancer classification using bundled PyTorch models
+- Pneumonia Detection from Chest X-rays
+- Brain Tumor classification from MRI scans
+- Bone Fracture detection from X-rays
 - Patient, doctor, and lab-technician portals with role-bearing JWT authentication
 - Department/doctor selection, scheduled appointment requests, clinical notes, and lab diagnostic orders
 - Doctor report review/release, prescriptions, specialist forwarding, and complete case-study PDFs
@@ -28,8 +29,7 @@ MedRittAI is a multi-role hospital diagnostic workflow platform connecting patie
 | --- | --- |
 | Frontend | React 19, TypeScript, Vite, Axios |
 | API | FastAPI, Pydantic, SQLAlchemy, SQLite |
-| Chest model | PyTorch, Hugging Face Transformers, RAD-DINO + CheXpert |
-| Brain model | TensorFlow/Keras, EfficientNetB3 |
+| Diagnostic Models | PyTorch (Skin Cancer, Pneumonia, Brain Tumor, Bone Fracture) |
 | Imaging | Pillow, OpenCV, pydicom |
 | Explainability | RAD-DINO patch-token attribution, Grad-CAM and multi-scale Grad-CAM++ |
 | Reports | Image-aware language model with grounded template fallbacks |
