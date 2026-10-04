@@ -277,12 +277,12 @@ class MedRittOrchestrator:
                 out.providers = providers
                 return out
 
-        # NVIDIA QA (only when Gemini was the author)
+        # NVIDIA QA for LLM reports
         nvidia_meta = ProviderMeta()
         qa_result_dict: Optional[Dict] = None
         decision = ReportDecision.ACCEPTED_NO_QA
 
-        if llm_provider == "gemini" and self._nvidia_service:
+        if llm_provider in {"gemini", "groq", "nvidia"} and self._nvidia_service:
             diag_dict = {
                 "top_label": getattr(jeevansh_result, "top_label", None),
                 "confidence": getattr(jeevansh_result, "confidence", 0.0),
@@ -303,7 +303,7 @@ class MedRittOrchestrator:
                 if qa is None:
                     nvidia_meta.status = ProviderStatus.UNAVAILABLE
                     decision = ReportDecision.ACCEPTED_NO_QA
-                    logger.warning("[%s] NVIDIA unavailable — retaining Gemini report", cid)
+                    logger.warning("[%s] NVIDIA unavailable — retaining %s report", cid, llm_provider)
                 elif not qa.passes or qa.recommendation.lower() == "flag":
                     nvidia_meta.status = ProviderStatus.SUCCESS
                     nvidia_meta.detail = f"qa=flag"
@@ -321,7 +321,7 @@ class MedRittOrchestrator:
                 nvidia_meta.status = ProviderStatus.FAILED
                 nvidia_meta.detail = "timeout"
                 decision = ReportDecision.ACCEPTED_NO_QA
-                logger.warning("[%s] NVIDIA QA timed out — retaining Gemini report", cid)
+                logger.warning("[%s] NVIDIA QA timed out — retaining %s report", cid, llm_provider)
             except Exception as exc:
                 nvidia_meta.status = ProviderStatus.FAILED
                 nvidia_meta.detail = str(exc)

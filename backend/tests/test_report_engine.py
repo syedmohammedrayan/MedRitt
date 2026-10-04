@@ -179,5 +179,120 @@ class PatientTranslationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Sarvam", output)
 
 
+class GeminiToNvidiaFallbackTests(unittest.IsolatedAsyncioTestCase):
+    async def test_gemini_hedged_report_switches_immediately_to_nvidia(self):
+        from unittest.mock import MagicMock
+        from PIL import Image
+
+        engine = LLMReportEngine(gemini_api_key="configured", nvidia_api_key="configured")
+
+        # Gemini returns a hedged report with no proper findings
+        hedged_report_mock = MagicMock()
+        hedged_report_mock.model_dump.return_value = {
+            "technique": "Single frontal chest radiograph.",
+            "comparison": "No prior examination supplied.",
+            "image_quality": "Limited visual quality.",
+            "findings": "Indeterminate chest radiograph, no definitive abnormality identified.",
+            "impression": "1. Indeterminate finding. No acute abnormality.",
+            "differential_diagnosis": "None.",
+            "recommendations": "Clinical correlation.",
+            "critical_communication": "No critical communication generated.",
+            "patient_explanation": "Findings are unclear.",
+        }
+        engine.gemini_service = MagicMock()
+        engine.gemini_service.generate_structured_report = AsyncMock(return_value=hedged_report_mock)
+
+        # NVIDIA service returns an authoritative report
+        nv_report = {
+            "technique": "Single frontal chest radiograph.",
+            "comparison": "No prior examination supplied.",
+            "image_quality": "Adequate.",
+            "findings": "LUNGS: Consolidation in the right lower lobe consistent with acute pneumonia. PLEURA: No effusion.",
+            "impression": "1. Right lower lobe pneumonia.",
+            "differential_diagnosis": "Bacterial pneumonia, viral pneumonia.",
+            "recommendations": "Correlate clinically and monitor antibiotic response.",
+            "critical_communication": "Routine notification.",
+            "patient_explanation": "Signs of a lung infection were identified.",
+        }
+        engine.nvidia_service = MagicMock()
+        engine.nvidia_service.generate_report = MagicMock(return_value=nv_report)
+        engine.nvidia_service.verify_report = MagicMock(return_value=MagicMock(passes=True, recommendation="accept", issues=[]))
+
+        res = result(label="Pneumonia", confidence=0.95, severity="Moderate")
+        img = Image.new("RGB", (100, 100), (128, 128, 128))
+        report = await engine.generate_report(res, "chest_xray", image=img)
+
+        # Gemini was called, but failed _has_proper_findings
+        engine.gemini_service.generate_structured_report.assert_awaited_once()
+        # Immediately fell back to NVIDIA
+        engine.nvidia_service.generate_report.assert_called_once()
+        self.assertIn("pneumonia", report["findings"].lower())
+        self.assertIn("pneumonia", report["impression"].lower())
+
+    async def test_gemini_rate_limited_switches_immediately_to_nvidia(self):
+        from unittest.mock import MagicMock
+        from PIL import Image
+
+        engine = LLMReportEngine(gemini_api_key="configured", nvidia_api_key="configured")
+
+        # Gemini raises rate limit / quota exceeded
+        engine.gemini_service = MagicMock()
+        engine.gemini_service.generate_structured_report = AsyncMock(side_effect=RuntimeError("429 ResourceExhausted: Quota exceeded"))
+
+        nv_report = {
+            "technique": "Single frontal chest radiograph.",
+            "comparison": "No prior examination supplied.",
+            "image_quality": "Adequate.",
+            "findings": "LUNGS: Consolidation in the right lower lobe. PLEURA: Clear.",
+            "impression": "1. Right lower lobe pneumonia.",
+            "differential_diagnosis": "Bacterial pneumonia.",
+            "recommendations": "Follow-up imaging.",
+            "critical_communication": "Routine notification.",
+            "patient_explanation": "Lung infection identified.",
+        }
+        engine.nvidia_service = MagicMock()
+        engine.nvidia_service.generate_report = MagicMock(return_value=nv_report)
+        engine.nvidia_service.verify_report = MagicMock(return_value=MagicMock(passes=True, recommendation="accept", issues=[]))
+
+        res = result(label="Pneumonia", confidence=0.95, severity="Moderate")
+        img = Image.new("RGB", (100, 100), (128, 128, 128))
+        report = await engine.generate_report(res, "chest_xray", image=img)
+
+        engine.nvidia_service.generate_report.assert_called_once()
+        self.assertIn("pneumonia", report["impression"].lower())
+
+    def test_scan_type_verifier_gemini_failure_switches_immediately_to_nvidia(self):
+        from unittest.mock import MagicMock
+        from PIL import Image
+        from services.scan_type_verifier import ScanTypeVerifier, ScanTypeVerification
+
+        verifier = ScanTypeVerifier(
+            api_key="test_gemini",
+            model="gemini-flash-latest",
+            nvidia_api_key="test_nvidia",
+            nvidia_model="meta/llama-3.2-11b-vision-instruct",
+        )
+        # Mock local model returning None (deferring to vision models)
+        verifier._verify_locally = MagicMock(return_value=None)
+        # Mock Gemini failing
+        verifier._verify_with_gemini = MagicMock(side_effect=RuntimeError("Gemini 429 Quota Exceeded"))
+        # Mock NVIDIA succeeding
+        nv_verif = ScanTypeVerification(
+            category="chest_xray",
+            confidence=0.98,
+            is_single_diagnostic_image=True,
+            anatomy_complete_enough=True,
+            reason="Frontal chest radiograph showing thorax.",
+        )
+        verifier._verify_with_nvidia = MagicMock(return_value=nv_verif)
+
+        img = Image.new("RGB", (256, 256), (120, 120, 120))
+        result_verif = verifier._verify_sync(img)
+
+        verifier._verify_with_gemini.assert_called_once()
+        verifier._verify_with_nvidia.assert_called_once()
+        self.assertEqual(result_verif.category, "chest_xray")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -118,6 +118,8 @@ async def lifespan(app: FastAPI):
         min_confidence=settings.SCAN_TYPE_MIN_CONFIDENCE,
         groq_api_key=settings.GROQ_API_KEY,
         groq_model=settings.SCAN_TYPE_GROQ_MODEL,
+        nvidia_api_key=settings.NVIDIA_API_KEY,
+        nvidia_model=settings.NVIDIA_VISION_MODEL,
     )
     app.state.scan_verifier = app.state.scan_type_verifier
     logger.info("  ✅ Strict pre-inference scan type verification ready.")

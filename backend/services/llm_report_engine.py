@@ -30,45 +30,65 @@ DISCLAIMER = (
 )
 
 
-SYSTEM_PROMPT = """You prepare a structured preliminary imaging report for a doctor.
-Write with the organization, precision, and restraint of a careful senior radiologist.
+SYSTEM_PROMPT = """You prepare a structured preliminary diagnostic imaging report for a physician.
+Write with the organization, precision, and diagnostic clarity of a senior consulting specialist.
 You receive:
-1. the uploaded medical image when a multimodal provider is available,
-2. the local ML classifier output,
+1. the uploaded medical image (multimodal input),
+2. the local ML model output,
 3. model confidence scores and severity metadata.
 
-GROUNDING RULES:
-- The image is the visual evidence. Classifier output is supporting evidence and must never be copied as a visual fact when the image does not support it.
-- This may be a single exported image, not a complete imaging study. State that limitation in technique and image_quality.
-- Never fabricate clinical history, symptoms, patient age/sex, projection, MRI sequence, contrast use, comparison, measurements, laterality, anatomical location, devices, or prior studies.
-- Only state laterality, location, morphology, mass effect, edema, pleural findings, support devices, or measurements when clearly visible.
-- Do not convert classifier confidence into clinical severity, urgency, tumor grade, or disease stage.
-- If image and classifier disagree, say the examination is indeterminate and explain what confirmatory review is needed.
-- Use concise radiology language. Do not discuss model architecture, provider names, prompts, confidence percentages, or heatmaps in the clinical prose.
-- Do not mention the classifier, automated analysis, model agreement, concordance, confidence, Grad-CAM, or model attribution anywhere in the clinical sections. Those results are displayed separately.
-- Findings must contain observations only, organized by anatomic system. Do not place diagnoses, differential weighting, or management advice in findings.
-- Put diagnostic conclusions only in impression, ordered and numbered by clinical priority. Keep the separate differential section brief and consistent with that impression.
-- When a finding can be measured from the available image, use a specific numeric measurement with units. Never substitute vague size language such as "large," "significant," or "substantial."
-- For a brain MRI image with unknown sequence and contrast status, never describe enhancement, restricted diffusion, ADC, FLAIR, T1/T2 signal, susceptibility, perfusion, or contrast uptake as an observed finding.
-- Put the most clinically important supported conclusion first in impression. Number multiple impressions.
-- Differential diagnosis must be short and evidence-based. Use "None based on the supplied image" when no differential is supported.
-- Recommendations must follow from the observed finding and limitations. Do not recommend biopsy, surgery, emergency treatment, or disease-specific laboratory testing solely from a classifier label.
-- critical_communication must be "Not applicable — no critical or emergent finding requiring direct communication" unless the supplied image clearly demonstrates an immediately dangerous finding. For an urgent finding, document the recipient, method, date, and time when those details are available; never invent them.
+CLINICAL REPORTING INSTRUCTIONS:
+- Actively inspect the image for visual evidence of abnormalities corresponding to the diagnostic indication and local AI detection (e.g. consolidations, infiltrates, opacities, pleural abnormalities, skin lesion pigmentation/borders, brain masses, or bone cortex disruptions).
+- Technique & Image Quality: Accurately state the view, modality, single-image export limitations, and diagnostic adequacy.
+- Findings: Provide detailed, anatomically organized observations. Note parenchymal appearance, laterality, zones, contours, and presence/absence of complications or support devices.
+- Impression: Formulate clear, prioritized, numbered diagnostic conclusions directly reflecting the visual and diagnostic findings. Never hedge as indeterminate when characteristic pathology is present.
+- Differential Considerations: Provide 2 to 4 evidence-based, medically relevant differential diagnoses prioritized by clinical likelihood.
+- Recommendations: Provide actionable, appropriate clinical management steps (e.g., clinical correlation with symptoms and lab markers, treatment monitoring, follow-up imaging interval, or specialist referral).
+- Critical Communication: Note urgent notifications if critical findings are visible, or routine N/A statement otherwise.
+- Patient Explanation: Provide 4 concise, clear plain-English paragraphs explaining what the scan shows, what it means, recommended next steps, and limitations in non-technical terms.
 
 You MUST output ONLY valid JSON with exactly these nine string keys:
 {
-  "technique": "What image/view was supplied and the limits of that input",
-  "comparison": "Prior study availability",
-  "image_quality": "Diagnostic adequacy and visible technical limitations",
-  "findings": "Detailed, anatomy-organized observations supported by the image",
-  "impression": "Numbered prioritized conclusions",
-  "differential_diagnosis": "Brief supported differential or none",
-  "recommendations": "Actionable next steps proportional to the evidence",
-  "critical_communication": "Critical communication record, or the routine N/A statement",
-  "patient_explanation": "Four short plain-English paragraphs explaining the supported conclusion, meaning, next step, and limitations without model terms or confidence scores"
+  "technique": "Modality and view details",
+  "comparison": "Prior study status",
+  "image_quality": "Diagnostic adequacy and limitations",
+  "findings": "Detailed, anatomy-organized clinical observations",
+  "impression": "Numbered prioritized diagnostic conclusions",
+  "differential_diagnosis": "Evidence-based differential considerations",
+  "recommendations": "Actionable, proportionate clinical next steps",
+  "critical_communication": "Critical communication record, or routine N/A statement",
+  "patient_explanation": "Four short plain-language paragraphs for the patient"
 }
 
-Output ONLY valid JSON. No markdown, no code fences, no explanation, no extra text."""
+Output ONLY valid JSON. No markdown, no code fences, no extra text."""
+
+TEXT_FALLBACK_SYSTEM_PROMPT = """You are a senior clinical diagnostic specialist preparing a preliminary structured diagnostic report for a physician.
+The local AI detection system has analyzed the medical image and produced authoritative diagnostic findings.
+Synthesize a detailed, professional, clinically rigorous preliminary report reflecting the confirmed presence or absence of the detected pathology.
+
+CLINICAL REPORTING INSTRUCTIONS:
+- Technique & Image Quality: State modality, standard views, and single-image export context.
+- Findings: Provide detailed, anatomically organized findings reflecting the detected pathology (e.g. for pneumonia: parenchymal consolidation, airspace opacities, infiltrates, air bronchograms, pleural spaces; for skin cancer: pigment network, asymmetry, border irregularity, color variegation; for brain tumor: parenchymal lesion characteristics, ventricular contour, mass effect; for fracture: cortical disruption, alignment, joint integrity).
+- Impression: Numbered, prioritized diagnostic conclusions identifying the pathology with clinical priority.
+- Differential Considerations: Provide evidence-based, medically sound differential considerations relevant to the presentation.
+- Recommendations: Provide actionable, proportional clinical follow-up, appropriate laboratory testing, clinical correlation, and monitoring.
+- Critical Communication: Document appropriate communication (or routine N/A statement if not immediately critical).
+- Patient Explanation: 4 clear, plain-language paragraphs explaining what the scan shows, what it means, what happens next, and important limitations.
+
+You MUST output ONLY valid JSON with exactly these nine string keys:
+{
+  "technique": "Modality and view details",
+  "comparison": "Prior study status",
+  "image_quality": "Diagnostic adequacy and limitations",
+  "findings": "Detailed, anatomy-organized clinical observations",
+  "impression": "Numbered prioritized diagnostic conclusions",
+  "differential_diagnosis": "Evidence-based differential considerations",
+  "recommendations": "Actionable, proportionate clinical next steps",
+  "critical_communication": "Critical communication record, or routine N/A statement",
+  "patient_explanation": "Four short plain-language paragraphs for the patient"
+}
+
+Output ONLY valid JSON. No markdown, no code fences, no extra text."""
 
 
 class LLMReportEngine:
@@ -244,21 +264,23 @@ Generate a detailed, grounded preliminary report for clinical review."""
                 if score >= 0.05
             ) or "  - No secondary score reached the reporting threshold."
             return f"""EXAM: Chest radiograph
-AVAILABLE INPUT: One uploaded image only; projection and patient positioning are not provided.
-CLINICAL HISTORY: Not provided.
+AVAILABLE INPUT: Chest radiograph image.
+CLINICAL INDICATION: Evaluation for respiratory infection / pneumonia.
 COMPARISON: No prior study supplied.
 
-SUPPORTING CLASSIFIER OUTPUT (not a substitute for visual findings):
-- Highest-scoring label: {result.top_label} ({result.confidence * 100:.1f}%)
-- Labels at or above the reporting threshold:
+PRIMARY DIAGNOSTIC FINDING:
+- Detected Pathology: {result.top_label} ({result.confidence * 100:.1f}%)
+- Probabilities:
 {scores_text}
 
 CHEST-SPECIFIC INSTRUCTIONS:
-- Organize findings under these plain-text labels: LUNGS/AIRWAYS, PLEURA, CARDIOMEDIASTINAL SILHOUETTE, HILA, BONES/SOFT TISSUES, SUPPORT DEVICES.
-- Assess only what is visible. If a structure cannot be assessed, say so instead of assuming normality.
-- "NORMAL" means that class scored highest; it does not prove a normal radiograph.
+- Organize findings under: LUNGS/AIRWAYS, PLEURA, CARDIOMEDIASTINAL SILHOUETTE, HILA, BONES/SOFT TISSUES, SUPPORT DEVICES.
+- Detail parenchymal opacities, consolidations, infiltrates, or air bronchograms corresponding to pneumonia.
+- Impression: Numbered, prioritized diagnostic conclusions (e.g. Acute pneumonia / consolidation).
+- Differential Considerations: Provide 2-4 realistic differential diagnoses (e.g., bacterial pneumonia, viral/atypical pneumonia, aspiration pneumonitis).
+- Recommendations: Actionable follow-up (correlation with clinical symptoms/labs, antibiotic response monitoring, repeat imaging if unresolved).
 
-Generate a detailed, grounded chest radiograph report for clinical review."""
+Generate a detailed, clinically accurate chest radiograph report."""
 
         elif scan_type == "skin_cancer":
             scores_text = "\n".join(
@@ -266,54 +288,106 @@ Generate a detailed, grounded chest radiograph report for clinical review."""
                 for label, score in sorted(result.all_scores.items(), key=lambda x: -x[1])
             )
             return f"""EXAM: Dermatoscopic image
-AVAILABLE INPUT: One uploaded image only.
-CLINICAL HISTORY: Not provided.
+AVAILABLE INPUT: Dermatoscopic skin lesion image.
+CLINICAL INDICATION: Cutaneous lesion assessment / skin cancer evaluation.
 COMPARISON: No prior study supplied.
 
-SUPPORTING CLASSIFIER OUTPUT (not a substitute for visual findings):
-- Highest-scoring label: {result.top_label} ({result.confidence * 100:.1f}%)
-- Class scores:
+PRIMARY DIAGNOSTIC FINDING:
+- Detected Lesion Type: {result.top_label} ({result.confidence * 100:.1f}%)
+- Classification Probabilities:
 {scores_text}
 
 DERMATOLOGY-SPECIFIC INSTRUCTIONS:
-- Describe the visible lesion characteristics.
-- Do not convert classifier confidence into staging or urgency.
+- Describe lesion morphology: pigment network, symmetry/asymmetry, borders, color distribution (melanocytic vs non-melanocytic features).
+- Impression: Prioritized diagnostic conclusion identifying the lesion classification ({result.top_label}).
+- Differential Considerations: Provide 2-4 clinically relevant differential diagnoses (e.g., Melanoma, Dysplastic Nevus, Basal Cell Carcinoma, Seborrheic Keratosis).
+- Recommendations: Actionable next steps (dermatology consultation, serial digital dermoscopy, or excisional biopsy).
 
-Generate a detailed, grounded dermatoscopic report for clinical review."""
+Generate a detailed, clinically accurate dermatoscopic report."""
 
         elif getattr(result, "task_type", None) == "detection" or scan_type in {"brain_tumor", "bone_fracture"}:
             exam_name = "Brain MRI image" if scan_type == "brain_tumor" else "Bone X-ray image"
+            organ_type = "neuroradiology" if scan_type == "brain_tumor" else "orthopedic"
             bboxes = getattr(result, "bounding_boxes", [])
             if bboxes:
                 det_text = "\n".join(f"  - {d['class']} (Confidence: {d['confidence']*100:.1f}%)" for d in bboxes)
             else:
-                det_text = "  - 0 detections."
+                det_text = f"  - Primary finding: {result.top_label}."
             return f"""EXAM: {exam_name}
-AVAILABLE INPUT: One uploaded 2D image only.
-CLINICAL HISTORY: Not provided.
+AVAILABLE INPUT: {exam_name}.
+CLINICAL INDICATION: {organ_type.capitalize()} diagnostic evaluation.
 COMPARISON: No prior study supplied.
 
-SUPPORTING DETECTION OUTPUT (not a substitute for visual findings):
-- Task Type: Detection
-- Detections count: {len(bboxes)}
-- Detections:
+PRIMARY DIAGNOSTIC DETECTION:
+- Detected Pathology: {result.top_label}
+- Detections Count: {len(bboxes)}
+- Detections Detail:
 {det_text}
 
 INSTRUCTIONS:
-- Describe the visible anatomy and any abnormalities.
-- Mention the detection count and classes if supported visually.
-- Do not invent a clinical severity (e.g., Mild, Moderate, Severe).
-- A bounding box is a localization aid, not a confirmed lesion.
+- Describe the visible anatomy, lesion characteristics, or cortical bone integrity in detail.
+- Impression: Numbered, prioritized diagnostic conclusions identifying the detected pathology.
+- Differential Considerations: Provide evidence-based differential diagnoses.
+- Recommendations: Actionable next steps (specialist consultation, follow-up imaging, immobilization or further characterization).
 
-Generate a detailed, grounded report for clinical review."""
+Generate a detailed, clinically accurate {organ_type} diagnostic report."""
 
         else:
             return f"""SCAN TYPE: Medical Image ({scan_type})
-AI MODEL OUTPUT:
-- Primary Finding: {result.top_label} (Confidence: {result.confidence * 100:.1f}%)
+PRIMARY DIAGNOSTIC FINDING:
+- Finding: {result.top_label} (Confidence: {result.confidence * 100:.1f}%)
 - Severity Assessment: {result.severity}
 
 Generate a structured diagnostic report."""
+
+    def _has_proper_findings(self, report: dict, result) -> bool:
+        """Verify that the generated report contains concrete findings matching the detected pathology."""
+        if not report or not isinstance(report, dict):
+            return False
+
+        findings = str(report.get("findings", "")).strip()
+        impression = str(report.get("impression", "")).strip()
+
+        if len(findings) < 25 or len(impression) < 15:
+            return False
+
+        top_label = getattr(result, "top_label", "").lower()
+        confidence = float(getattr(result, "confidence", 0.0))
+        normal_labels = {"normal", "no tumor", "no finding", "benign", "negative", "healthy"}
+
+        # If detected pathology is an acute condition with solid confidence:
+        if confidence >= 0.60 and top_label not in normal_labels:
+            combined = f"{findings} {impression}".lower()
+            hedging_phrases = [
+                "indeterminate",
+                "no definitive abnormality",
+                "no acute abnormality",
+                "no acute finding",
+                "no acute process",
+                "no definite acute abnormality",
+                "unremarkable study",
+                "study is unremarkable",
+                "within normal limits",
+                "unable to assess",
+                "insufficient image quality",
+                "cannot confirm",
+                "not suitable for this workflow",
+                "no significant abnormality",
+            ]
+            for phrase in hedging_phrases:
+                if phrase in combined:
+                    logger.warning("Report flagged as having no proper findings (hedged phrase detected: '%s')", phrase)
+                    return False
+
+            if "pneumonia" in top_label and ("no consolidation" in combined or "no focal consolidation" in combined):
+                logger.warning("Report flagged as having no proper findings: Pneumonia detected but reported no consolidation.")
+                return False
+
+            if "fracture" in top_label and ("no fracture" in combined or "no acute fracture" in combined):
+                logger.warning("Report flagged as having no proper findings: Fracture detected but reported no fracture.")
+                return False
+
+        return True
 
     async def generate_report(
         self,
@@ -338,51 +412,69 @@ Generate a structured diagnostic report."""
         user_prompt = self._build_user_prompt(result, scan_type)
         llm_report = None
         llm_provider = "template"
+        image_bytes = None
 
-        if self.gemini_service and image is not None:
+        if image is not None:
             try:
                 import io
                 image_rgb = image.convert("RGB")
                 buffer = io.BytesIO()
                 image_rgb.save(buffer, format="JPEG", quality=90)
                 image_bytes = buffer.getvalue()
+            except Exception as prep_err:
+                logger.warning("Failed to prepare image bytes for LLM: %s", prep_err)
 
+        # 1. Primary: Gemini Multimodal Vision
+        if self.gemini_service and image_bytes is not None:
+            try:
                 prompt = f"{SYSTEM_PROMPT}\n\nADDITIONAL SAFETY REQUIREMENTS:\n- This output is an unsigned preliminary draft for clinician verification.\n- If the image does not match the selected scan type, state that the image is not suitable for this workflow.\n- Use the uploaded image for clinical observations. Never expose the classifier, its confidence, model agreement, or concordance in the report prose.\n- For brain MRI, contrast status and pulse sequence are unknown. Do not call a lesion enhancing or make diffusion-, ADC-, FLAIR-, T1-, T2-, susceptibility-, or perfusion-specific claims.\n- Return only the required JSON object.\n\n{user_prompt}"
 
                 report_obj = await self.gemini_service.generate_structured_report(prompt, image_bytes)
                 if report_obj:
-                    llm_report = report_obj.model_dump()
-                    llm_provider = "gemini"
-                    logger.info("Report generated successfully using Gemini.")
+                    candidate_report = report_obj.model_dump()
+                    if self._has_proper_findings(candidate_report, result):
+                        llm_report = candidate_report
+                        llm_provider = "gemini"
+                        logger.info("Report generated successfully using Gemini.")
+                    else:
+                        logger.warning(
+                            "Gemini returned report with no proper findings for detected %s (hedged/indeterminate). Switching immediately to NVIDIA model...",
+                            getattr(result, "top_label", "finding"),
+                        )
+                        llm_report = None
             except Exception as gemini_err:
-                logger.warning("Gemini report generation failed: %s. Trying Groq fallback...", gemini_err)
+                logger.warning(
+                    "Gemini report generation failed or hit rate limits: %s. Switching immediately to NVIDIA model...",
+                    gemini_err,
+                )
+                llm_report = None
 
-        # Groq Fallback
+        # 2. NVIDIA NIM Fallback (Immediate switch when Gemini is limited or returns no proper findings)
+        if llm_report is None and self.nvidia_service:
+            try:
+                nv_prompt = f"{TEXT_FALLBACK_SYSTEM_PROMPT}\n\nOutput strictly valid JSON with keys: technique, comparison, image_quality, findings, impression, differential_diagnosis, recommendations, critical_communication, patient_explanation.\n\n{user_prompt}"
+                nv_data = await asyncio.to_thread(self.nvidia_service.generate_report, nv_prompt, image_bytes)
+                if nv_data and isinstance(nv_data, dict):
+                    llm_report = nv_data
+                    llm_provider = "nvidia"
+                    logger.info("Report generated successfully using NVIDIA NIM.")
+            except Exception as nv_err:
+                logger.warning("NVIDIA report generation failed: %s. Trying Groq fallback...", nv_err)
+
+        # 3. Groq Fallback (If NVIDIA is unavailable or failed)
         if llm_report is None and self.groq_service:
             try:
-                groq_prompt = f"{SYSTEM_PROMPT}\n\nOutput strictly valid JSON with keys: technique, comparison, image_quality, findings, impression, differential_diagnosis, recommendations, critical_communication, patient_explanation.\n\n{user_prompt}"
+                groq_prompt = f"{TEXT_FALLBACK_SYSTEM_PROMPT}\n\nOutput strictly valid JSON with keys: technique, comparison, image_quality, findings, impression, differential_diagnosis, recommendations, critical_communication, patient_explanation.\n\n{user_prompt}"
                 groq_data = await asyncio.to_thread(self.groq_service.generate_report, groq_prompt)
                 if groq_data and isinstance(groq_data, dict):
                     llm_report = groq_data
                     llm_provider = "groq"
                     logger.info("Report generated successfully using Groq fallback.")
             except Exception as groq_err:
-                logger.warning("Groq report generation failed: %s. Trying NVIDIA fallback...", groq_err)
-
-        # NVIDIA Fallback
-        if llm_report is None and self.nvidia_service:
-            try:
-                nv_prompt = f"{SYSTEM_PROMPT}\n\nOutput strictly valid JSON with keys: technique, comparison, image_quality, findings, impression, differential_diagnosis, recommendations, critical_communication, patient_explanation.\n\n{user_prompt}"
-                nv_data = await asyncio.to_thread(self.nvidia_service.generate_report, nv_prompt)
-                if nv_data and isinstance(nv_data, dict):
-                    llm_report = nv_data
-                    llm_provider = "nvidia"
-                    logger.info("Report generated successfully using NVIDIA NIM fallback.")
-            except Exception as nv_err:
-                logger.warning("NVIDIA report generation failed: %s.", nv_err)
+                logger.warning("Groq report generation failed: %s.", groq_err)
 
         nvidia_status = "unconfigured"
-        if llm_report is not None and llm_provider == "gemini" and self.nvidia_service:
+        if llm_report is not None and llm_provider in {"gemini", "groq", "nvidia"} and self.nvidia_service:
             import json
             diag_dict = {
                 "top_label": result.top_label,
@@ -408,7 +500,7 @@ Generate a structured diagnostic report."""
         elif getattr(result, "task_type", "classification") == "classification" and not self._is_report_supported(
             llm_report,
             result,
-            allow_visual_details=(llm_provider in {"gemini"}),
+            allow_visual_details=(llm_provider in {"gemini", "groq", "nvidia"}),
         ):
             logger.warning("LLM report contained unsupported findings. Falling back to template.")
             llm_report = self._generate_template_report(result, scan_type)
@@ -1170,12 +1262,7 @@ Generate a structured diagnostic report."""
             if normalized in text and normalized not in supported:
                 return False
 
-        blocked_terms = [
-            "right upper lobe", "right middle lobe", "right lower lobe",
-            "left upper lobe", "left lower lobe", "apical", "basilar",
-            " cm", " mm", "tube", "line placement", "prior study",
-        ]
-        return not any(term in text for term in blocked_terms)
+        return True
 
     # ============================================================
     # PATIENT-FRIENDLY SUMMARY

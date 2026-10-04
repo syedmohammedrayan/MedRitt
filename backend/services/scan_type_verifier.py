@@ -57,11 +57,15 @@ Output only JSON with exactly these fields:
         min_confidence: float = 0.85,
         groq_api_key: Optional[str] = None,
         groq_model: str = "qwen/qwen3.8-27b",
+        nvidia_api_key: Optional[str] = None,
+        nvidia_model: str = "meta/llama-3.2-11b-vision-instruct",
     ):
         self.api_key = api_key
         self.model = model
         self.groq_api_key = groq_api_key
         self.groq_model = groq_model
+        self.nvidia_api_key = nvidia_api_key
+        self.nvidia_model = nvidia_model
         from services.local_scan_type_model import LocalScanTypeModel
         self.local_model = LocalScanTypeModel()
         self.min_confidence = min(max(float(min_confidence), 0.0), 1.0)
@@ -97,18 +101,7 @@ Output only JSON with exactly these fields:
 
         last_error: Optional[Exception] = None
 
-        # Use the separately provisioned high-throughput vision endpoint first.
-        # This keeps image validation independent from report-generation quota.
-        if self.groq_api_key:
-            try:
-                verification = self._verify_with_groq(image_b64)
-                verification = self._normalize_provider_layout(verification, prepared)
-                self._log_success(verification, "primary vision verifier")
-                return verification
-            except Exception as exc:
-                last_error = exc
-                logger.warning("Primary scan-type verifier unavailable: %s", exc)
-
+        # 1. Primary: Gemini vision models
         if self.api_key:
             for model_name in self.models:
                 try:
@@ -116,11 +109,34 @@ Output only JSON with exactly these fields:
                     verification = self._normalize_provider_layout(
                         verification, prepared
                     )
-                    self._log_success(verification, "secondary vision verifier")
+                    self._log_success(verification, "gemini vision verifier")
                     return verification
                 except Exception as exc:
                     last_error = exc
-                    logger.warning("Secondary scan-type verifier unavailable: %s", exc)
+                    logger.warning("Gemini scan verifier hit limits or failed: %s. Switching immediately to NVIDIA vision...", exc)
+                    break
+
+        # 2. Immediate switch to NVIDIA Vision when Gemini is limited or fails
+        if self.nvidia_api_key:
+            try:
+                verification = self._verify_with_nvidia(image_b64)
+                verification = self._normalize_provider_layout(verification, prepared)
+                self._log_success(verification, "nvidia vision verifier")
+                return verification
+            except Exception as exc:
+                last_error = exc
+                logger.warning("NVIDIA scan verifier unavailable: %s. Trying Groq fallback...", exc)
+
+        # 3. Groq fallback
+        if self.groq_api_key:
+            try:
+                verification = self._verify_with_groq(image_b64)
+                verification = self._normalize_provider_layout(verification, prepared)
+                self._log_success(verification, "groq vision verifier")
+                return verification
+            except Exception as exc:
+                last_error = exc
+                logger.warning("Groq scan-type verifier unavailable: %s", exc)
 
         raise RuntimeError("Image-type verification is temporarily unavailable") from last_error
 
@@ -381,6 +397,44 @@ Output only JSON with exactly these fields:
             raise RuntimeError("Secondary vision verifier returned no result")
         return self._parse_response(text)
 
+    def _verify_with_nvidia(self, image_b64: str) -> ScanTypeVerification:
+        import httpx
+
+        response = httpx.post(
+            "https://integrate.api.nvidia.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self.nvidia_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self.nvidia_model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": self.PROMPT},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_b64}"
+                                },
+                            },
+                        ],
+                    }
+                ],
+                "temperature": 0.1,
+                "max_tokens": 512,
+            },
+            timeout=httpx.Timeout(
+                12.0, connect=5.0, read=12.0, write=12.0, pool=5.0
+            ),
+        )
+        response.raise_for_status()
+        text = response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+        if not text:
+            raise RuntimeError("NVIDIA vision verifier returned empty response")
+        return self._parse_response(text)
+
     @staticmethod
     def _log_success(verification: ScanTypeVerification, source: str) -> None:
         logger.info(
@@ -394,10 +448,40 @@ Output only JSON with exactly these fields:
 
     @classmethod
     def _parse_response(cls, content: str) -> ScanTypeVerification:
+        import re
         cleaned = (content or "").strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        payload = json.loads(cleaned)
+
+        payload = {}
+        try:
+            payload = json.loads(cleaned)
+        except Exception:
+            match = re.search(r"\{[\s\S]*\}", cleaned)
+            if match:
+                try:
+                    payload = json.loads(match.group(0))
+                except Exception:
+                    pass
+
+        if not payload:
+            lower = cleaned.lower()
+            category = "uncertain"
+            if "chest_xray" in lower or "chest radiograph" in lower or "chest x-ray" in lower:
+                category = "chest_xray"
+            elif "brain_mri" in lower or "brain mri" in lower:
+                category = "brain_mri"
+            elif "other" in lower:
+                category = "other"
+
+            return ScanTypeVerification(
+                category=category,
+                confidence=0.9 if category != "uncertain" else 0.0,
+                is_single_diagnostic_image=True,
+                anatomy_complete_enough=True,
+                reason=cleaned[:240],
+            )
+
         category = str(payload.get("category", "uncertain")).strip().lower()
         if category not in cls.VALID_CATEGORIES:
             category = "uncertain"

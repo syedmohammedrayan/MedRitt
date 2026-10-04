@@ -58,8 +58,7 @@ Output your response as JSON matching exactly this schema:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.0,
-                max_tokens=500,
-                response_format={"type": "json_object"},
+                max_tokens=2048,
                 timeout=60.0
             )
             content = response.choices[0].message.content
@@ -68,14 +67,11 @@ Output your response as JSON matching exactly this schema:
                 return None
             logger.info("NVIDIA Raw Content: " + repr(content))
 
+            import re
             cleaned = content.strip()
-            if cleaned.startswith("```"):
-                lines = cleaned.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                cleaned = chr(10).join(lines).strip()
+            match = re.search(r"\{[\s\S]*\}", cleaned)
+            if match:
+                cleaned = match.group(0)
 
             parsed = json.loads(cleaned)
             result = ReportQAResult(**parsed)
@@ -90,49 +86,61 @@ Output your response as JSON matching exactly this schema:
             logger.error("Unexpected error in NVIDIA QA verification: " + str(e))
             return None
 
-    def generate_report(self, prompt: str) -> Optional[dict]:
-        """Generate structured clinical report via NVIDIA NIM."""
+    def generate_report(self, prompt: str, image_bytes: Optional[bytes] = None) -> Optional[dict]:
+        """Generate structured clinical report via NVIDIA NIM (vision or text)."""
         if not self.client:
             logger.error("NVIDIA client not initialized (missing API key).")
             return None
         try:
-            models_to_try = [self.model, "meta/llama-3.2-11b-vision-instruct", "mistralai/mistral-large-2-instruct"]
-            for m in models_to_try:
+            image_b64 = None
+            if image_bytes:
+                import base64
+                image_b64 = base64.b64encode(image_bytes).decode("ascii")
+
+            models_to_try = []
+            if image_b64:
+                models_to_try.append(("meta/llama-3.2-11b-vision-instruct", True))
+            models_to_try.extend([
+                (self.model, False),
+                ("meta/llama-3.2-11b-vision-instruct", False),
+                ("mistralai/mistral-large-2-instruct", False),
+            ])
+
+            for m, use_vision in models_to_try:
                 try:
+                    if use_vision and image_b64:
+                        user_content = [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+                        ]
+                    else:
+                        user_content = prompt
+
                     response = self.client.chat.completions.create(
                         model=m,
                         messages=[
                             {"role": "system", "content": "You are a clinical diagnostic reporting AI. Output strictly valid JSON matching the requested schema without conversational filler."},
-                            {"role": "user", "content": prompt}
+                            {"role": "user", "content": user_content}
                         ],
                         temperature=0.1,
-                        max_tokens=1500,
-                        timeout=45.0
+                        max_tokens=2048,
+                        timeout=50.0
                     )
                     content = response.choices[0].message.content
                     if not content:
                         continue
                     cleaned = content.strip()
-                    if "```" in cleaned:
-                        parts = cleaned.split("```")
-                        for p in parts:
-                            p = p.strip()
-                            if p.startswith("json"):
-                                p = p[4:].strip()
-                            try:
-                                data = json.loads(p)
-                                logger.info("Report generated successfully using NVIDIA NIM (%s)", m)
-                                return data
-                            except Exception:
-                                continue
-                    first_brace = cleaned.find("{")
-                    last_brace = cleaned.rfind("}")
-                    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-                        data = json.loads(cleaned[first_brace:last_brace+1])
-                        logger.info("Report generated successfully using NVIDIA NIM (%s)", m)
-                        return data
+                    import re
+                    match = re.search(r"\{[\s\S]*\}", cleaned)
+                    if match:
+                        try:
+                            data = json.loads(match.group(0))
+                            logger.info("Report generated successfully using NVIDIA NIM (%s, vision=%s)", m, use_vision)
+                            return data
+                        except Exception:
+                            pass
                 except Exception as inner_e:
-                    logger.warning("NVIDIA model %s failed: %s", m, inner_e)
+                    logger.warning("NVIDIA model %s (vision=%s) failed: %s", m, use_vision, inner_e)
                     continue
             return None
         except Exception as e:

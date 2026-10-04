@@ -69,6 +69,7 @@ class Settings(BaseSettings):
         description="NVIDIA API Key"
     )
     NVIDIA_MODEL: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    NVIDIA_VISION_MODEL: str = "meta/llama-3.2-11b-vision-instruct"
 
     # --- Server ---
     BACKEND_HOST: str = "0.0.0.0"

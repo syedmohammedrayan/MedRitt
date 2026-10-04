@@ -23,9 +23,9 @@ class ReportSchema(BaseModel):
     patient_explanation: str
 
 class GeminiService:
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-3.5-flash"):
         self.api_key = api_key
-        self.model = model
+        self.model = model or "gemini-3.5-flash"
         self.client = genai.Client(api_key=api_key)
 
     async def generate_structured_report(self, prompt: str, image_bytes: Optional[bytes] = None) -> Optional[ReportSchema]:
@@ -42,18 +42,17 @@ class GeminiService:
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=ReportSchema,
-            temperature=0.0,
+            temperature=0.1,
         )
 
         for attempt in range(2):
             try:
-                # Use asyncio.wait_for to enforce timeout if the SDK doesn't support timeout argument easily
                 task = self.client.aio.models.generate_content(
                     model=self.model,
                     contents=contents,
                     config=config,
                 )
-                response = await asyncio.wait_for(task, timeout=20.0)
+                response = await asyncio.wait_for(task, timeout=60.0)
 
                 if not response.text:
                     logger.error("Gemini returned empty response.")
@@ -68,10 +67,13 @@ class GeminiService:
 
             except asyncio.TimeoutError:
                 logger.warning(f"Gemini API timeout on attempt {attempt + 1}")
+                if attempt == 0:
+                    await asyncio.sleep(1.0)
+                    continue
                 break
             except APIError as e:
                 logger.error(f"Gemini API Error: {e}")
-                if "429" in str(e):
+                if any(err_code in str(e) for err_code in ["429", "503", "UNAVAILABLE"]):
                     await asyncio.sleep(2.0)
                     continue
                 break
