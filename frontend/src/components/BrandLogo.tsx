@@ -1,5 +1,5 @@
-import brandLogo from '../../../MedRittAI_Healthcare_Logo-removebg-preview.png';
-
+import { Link } from 'react-router-dom';
+import brandLogoDefault from '../../../MedRittAI_Healthcare_Logo-removebg-preview.png';
 
 type BrandLogoProps = {
   className?: string;
@@ -10,14 +10,15 @@ export default function BrandLogo({ className = '', variant = 'default' }: Brand
   const isLoginLogo = variant === 'login';
 
   return (
-    <span className={`medritt-logo ${className}`.trim()}>
+    <a href="/" className={`medritt-logo ${className}`.trim()} style={{ textDecoration: 'none', display: 'inline-flex' }}>
       <img
-        src={brandLogo}
+        src={isLoginLogo ? "/logo.png" : brandLogoDefault}
         alt="MedRittAI logo"
         width={isLoginLogo ? 1536 : 608}
         height={isLoginLogo ? 1024 : 400}
         decoding="async"
+        style={{ maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
       />
-    </span>
+    </a>
   );
 }

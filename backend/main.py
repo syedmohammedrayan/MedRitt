@@ -73,6 +73,36 @@ async def lifespan(app: FastAPI):
                 pharmacies = [pharm_user]
                 logger.info("✅ Default pharmacy account initialized.")
 
+            # Seed departments and doctors
+            dermatology = crud.get_or_create_department(db, "Dermatology", "Skin and hair care")
+            pulmonology = crud.get_or_create_department(db, "Pulmonology", "Respiratory health")
+            neurology = crud.get_or_create_department(db, "Neurology", "Nervous system care")
+            orthopedics = crud.get_or_create_department(db, "Orthopedics", "Bone and joint care")
+
+            doctors_list = crud.get_users_by_role(db, "doctor")
+            if len(doctors_list) <= 1:
+                logger.info("👨‍⚕️ Seeding available doctors for departments...")
+                pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+                hashed_pw = pwd_context.hash("doctor123")
+
+                # Dermatology
+                crud.create_user(db, "derm1", hashed_pw, "doctor", "Dr. Sarah Jenkins", "Dermatologist", "MD, FAAD", dermatology.id)
+                crud.create_user(db, "derm2", hashed_pw, "doctor", "Dr. Aisha Patel", "Dermatologist", "MD, Board Certified", dermatology.id)
+                crud.create_user(db, "derm3", hashed_pw, "doctor", "Dr. Rajiv Sharma", "Dermatologist", "MBBS, MD", dermatology.id)
+
+                # Pulmonology
+                crud.create_user(db, "pulm1", hashed_pw, "doctor", "Dr. Shekar Reddy", "Pulmonologist", "MD, FCCP", pulmonology.id)
+                crud.create_user(db, "pulm2", hashed_pw, "doctor", "Dr. Emily Chen", "Pulmonologist", "MD", pulmonology.id)
+
+                # Neurology
+                crud.create_user(db, "neuro1", hashed_pw, "doctor", "Dr. Robert Singh", "Neurologist", "MD, PhD", neurology.id)
+                crud.create_user(db, "neuro2", hashed_pw, "doctor", "Dr. Lisa Wong", "Neurologist", "MD", neurology.id)
+
+                # Orthopedics
+                crud.create_user(db, "ortho1", hashed_pw, "doctor", "Dr. Marcus Johnson", "Orthopedic Surgeon", "MD", orthopedics.id)
+                crud.create_user(db, "ortho2", hashed_pw, "doctor", "Dr. Priya Gupta", "Orthopedic Surgeon", "MS Ortho", orthopedics.id)
+                logger.info("✅ Doctors seeded successfully.")
+
             # Seed initial stock for common medicines if inventory is empty
             pharmacy_id = pharmacies[0].id
             inv = crud.get_inventory(db, pharmacy_id)

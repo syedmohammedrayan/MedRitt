@@ -44,8 +44,12 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
-      <section className="login-editorial" aria-labelledby="login-wordmark">
-        <div className="login-brand">
+      <section className="login-editorial" aria-labelledby="login-wordmark" style={{ position: 'relative' }}>
+        <Link to="/" style={{ position: 'absolute', top: '24px', left: '24px', color: '#fff', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, opacity: 0.8, transition: 'opacity 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.opacity = '1'} onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Back to Home
+        </Link>
+        <div className="login-brand" style={{ marginTop: '30px' }}>
           <BrandLogo className="medritt-logo--auth" variant="login" />
           <span>Clinical imaging</span>
         </div>

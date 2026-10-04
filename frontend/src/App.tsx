@@ -26,6 +26,7 @@ import type { UserRole } from './types';
 import BrandLogo from './components/BrandLogo';
 import SecurityQuestionsForm from './components/SecurityQuestionsForm';
 import { apiAssetUrl, updateMe, uploadProfileAvatar } from './api/client';
+import ThemeToggle from './components/ThemeToggle';
 
 function getProfileLabel(role: UserRole): string {
   switch (role) {
@@ -184,7 +185,7 @@ function ApplicationFrame() {
     <div className={isAuthenticated && !isLandingPage ? `app-shell${sidebarCollapsed ? ' app-shell--collapsed' : ''}` : 'auth-shell'}>
       {!isLandingPage && <Navigation collapsed={sidebarCollapsed} onToggle={toggleSidebar} />}
       <main className={isAuthenticated && !isLandingPage ? 'page-content' : 'page-content page-content--auth'}>
-        {isAuthenticated && user && !isLandingPage && <div className="workspace-context-bar"><span>{dashboardLabels[user.role]}</span><AccountMenu /></div>}
+        {isAuthenticated && user && !isLandingPage && <div className="workspace-context-bar"><span>{dashboardLabels[user.role]}</span><div style={{display: 'flex', alignItems: 'center', gap: '16px'}}><ThemeToggle /><AccountMenu /></div></div>}
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />

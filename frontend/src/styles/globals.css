@@ -279,8 +279,8 @@ h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -.01
 .record-row > div { display: grid; min-width: 0; }
 .record-row strong { overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .record-row small { color: var(--ink-soft); font-family: var(--body); font-size: 12px; font-weight: 500; line-height: 1.5; text-transform: none; }
-.record-row p { overflow: hidden; margin-top: 5px; color: #354554; font-size: 13px; line-height: 1.55; text-overflow: ellipsis; white-space: nowrap; }
-.record-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; background: #e8edf2; color: var(--navy); font-family: var(--mono); font-size: 10px; font-weight: 600; }
+.record-row p { overflow: hidden; margin-top: 5px; color: var(--ink-soft); font-size: 13px; line-height: 1.55; text-overflow: ellipsis; white-space: nowrap; }
+.record-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; background: var(--line); color: var(--ink); font-family: var(--mono); font-size: 10px; font-weight: 600; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #9ca3a6; }
 .status-requested { background: var(--heat-amber); }
 .status-confirmed,.status-in_progress,.status-preliminary { background: var(--teal); }
@@ -345,9 +345,17 @@ h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -.01
 .appointment-status--confirmed,.appointment-status--in_progress { border-color: #8fc2c7; background: #eaf5f6; color: var(--teal-deep); }
 .appointment-status--completed { border-color: #afd6ba; background: #e8f6ec; color: #246638; }
 .appointment-status--cancelled { border-color: #efb8b8; background: #fceaea; color: #962929; }
-.record-note { display: grid; gap: 3px; overflow: visible !important; margin-top: 10px !important; padding: 10px 12px; border-left: 3px solid var(--slate-blue); background: #f3f5f7; color: #2e3e4c !important; font-size: 13px !important; line-height: 1.6; overflow-wrap: anywhere; text-overflow: clip !important; white-space: pre-wrap !important; }
+
+html.dark .appointment-status--requested { border-color: #e0a530; background: rgba(224, 165, 48, 0.15); color: #f2c974; }
+html.dark .appointment-status--confirmed, html.dark .appointment-status--in_progress { border-color: #8fc2c7; background: rgba(143, 194, 199, 0.15); color: #8fd0d8; }
+html.dark .appointment-status--completed { border-color: #afd6ba; background: rgba(175, 214, 186, 0.15); color: #82cc9b; }
+html.dark .appointment-status--cancelled { border-color: #efb8b8; background: rgba(239, 184, 184, 0.15); color: #f08888; }
+
+html.dark .status-pill { background: rgba(255, 255, 255, 0.1); color: var(--ink); }
+html.dark .status-pill--available { background: rgba(175, 214, 186, 0.15); color: #82cc9b; }
+.record-note { display: grid; gap: 3px; overflow: visible !important; margin-top: 10px !important; padding: 10px 12px; border-left: 3px solid var(--slate-blue); background: var(--panel); color: var(--ink) !important; font-size: 13px !important; line-height: 1.6; overflow-wrap: anywhere; text-overflow: clip !important; white-space: pre-wrap !important; }
 .record-note span { color: var(--slate-blue); font-family: var(--body); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.patient-report-record { align-items: start; margin-top: 8px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #fdfdfb; }
+.patient-report-record { align-items: start; margin-top: 8px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
 .patient-report-record .record-icon { margin-top: 1px; }
 .patient-report-record strong { white-space: normal; }
 .approval-line { display: inline-flex; width: max-content; align-items: center; gap: 6px; margin-top: 7px; color: var(--navy); font-size: 12px; font-weight: 700; }
@@ -381,7 +389,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -.01
 .medicine-select-field { min-width: 0; }
 
 /* Patient dashboard — high-clarity reading system */
-.patient-dashboard-page { color: #17212b; }
+.patient-dashboard-page { color: var(--ink); }
 .patient-dashboard-page .portal-hero { margin-bottom: 30px; padding-bottom: 28px; }
 .patient-dashboard-page .portal-hero .eyebrow { margin-bottom: 8px; color: #465564; font-family: var(--body); font-size: 13px; font-weight: 700; letter-spacing: .08em; }
 .patient-dashboard-page .portal-hero h1 { color: #17212b; font-size: clamp(34px,4vw,50px); font-weight: 700; }
@@ -389,44 +397,44 @@ h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -.01
 .patient-dashboard-page .portal-hero .button { min-height: 48px; padding: 12px 21px; font-family: var(--body); font-size: 15px; font-weight: 700; }
 .patient-dashboard-page .metric-grid { gap: 14px; margin-bottom: 24px; }
 .patient-dashboard-page .metric-grid article { min-height: 148px; padding: 21px; }
-.patient-dashboard-page .metric-grid span { color: #465564; font-family: var(--body); font-size: 13px; font-weight: 700; letter-spacing: .045em; }
-.patient-dashboard-page .metric-grid strong { margin: 12px 0 8px; color: #17212b; font-size: 40px; font-weight: 700; }
-.patient-dashboard-page .metric-grid small { color: #3f4e5a; font-family: var(--body); font-size: 14px; font-weight: 600; line-height: 1.45; }
-.patient-dashboard-page .portal-card { padding: 24px; border-color: #d6dce0; box-shadow: 0 18px 38px -34px rgba(23,33,43,.62); }
+.patient-dashboard-page .metric-grid span { color: var(--ink-soft); font-family: var(--body); font-size: 13px; font-weight: 700; letter-spacing: .045em; }
+.patient-dashboard-page .metric-grid strong { margin: 12px 0 8px; color: var(--ink); font-size: 40px; font-weight: 700; }
+.patient-dashboard-page .metric-grid small { color: var(--ink-soft); font-family: var(--body); font-size: 14px; font-weight: 600; line-height: 1.45; }
+.patient-dashboard-page .portal-card { padding: 24px; border-color: var(--line); box-shadow: 0 18px 38px -34px rgba(0,0,0,.62); }
 .patient-dashboard-page .portal-card > header { margin-bottom: 17px; }
-.patient-dashboard-page .portal-card > header .eyebrow { margin-bottom: 4px; color: #52616d; font-family: var(--body); font-size: 12px; font-weight: 700; letter-spacing: .07em; }
-.patient-dashboard-page .portal-card > header h2 { color: #17212b; font-size: 24px; font-weight: 700; }
-.patient-dashboard-page .portal-card > header > a { color: #0a5a68; font-family: var(--body); font-size: 14px; font-weight: 700; }
+.patient-dashboard-page .portal-card > header .eyebrow { margin-bottom: 4px; color: var(--ink-soft); font-family: var(--body); font-size: 12px; font-weight: 700; letter-spacing: .07em; }
+.patient-dashboard-page .portal-card > header h2 { color: var(--ink); font-size: 24px; font-weight: 700; }
+.patient-dashboard-page .portal-card > header > a { color: var(--teal); font-family: var(--body); font-size: 14px; font-weight: 700; }
 .patient-dashboard-page .record-list { gap: 12px; }
-.patient-dashboard-page .record-row { min-height: 0; padding: 17px; border: 1px solid #dfe3e6; border-radius: 11px; background: #fff; }
+.patient-dashboard-page .record-row { min-height: 0; padding: 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); }
 .patient-dashboard-page .record-row > div { gap: 3px; }
-.patient-dashboard-page .record-row strong { overflow: visible; color: #17212b; font-size: 16px; font-weight: 700; line-height: 1.45; text-overflow: clip; white-space: normal; }
-.patient-dashboard-page .record-row small { color: #465564; font-family: var(--body); font-size: 14px; font-weight: 600; line-height: 1.55; text-transform: none; }
-.patient-dashboard-page .record-row p { color: #33424e; font-size: 14px; line-height: 1.6; }
+.patient-dashboard-page .record-row strong { overflow: visible; color: var(--ink); font-size: 16px; font-weight: 700; line-height: 1.45; text-overflow: clip; white-space: normal; }
+.patient-dashboard-page .record-row small { color: var(--ink-soft); font-family: var(--body); font-size: 14px; font-weight: 600; line-height: 1.55; text-transform: none; }
+.patient-dashboard-page .record-row p { color: var(--ink-soft); font-size: 14px; line-height: 1.6; }
 .patient-dashboard-page .appointment-record { grid-template-columns: 10px minmax(0,1fr) auto; align-items: start; padding: 18px; }
-.patient-dashboard-page .appointment-credentials { color: #263b4a !important; font-size: 14px !important; font-weight: 700; }
-.patient-dashboard-page .appointment-date { color: #465564 !important; font-size: 14px !important; font-weight: 600; }
-.patient-dashboard-page .record-note { margin-top: 11px !important; padding: 11px 13px; border-left: 3px solid #526d82; background: #f3f5f7; color: #24333f !important; font-size: 14px !important; font-weight: 600; }
-.patient-dashboard-page .record-note span { color: #465564; font-family: var(--body); font-size: 11px; font-weight: 700; }
+.patient-dashboard-page .appointment-credentials { color: var(--ink) !important; font-size: 14px !important; font-weight: 700; }
+.patient-dashboard-page .appointment-date { color: var(--ink-soft) !important; font-size: 14px !important; font-weight: 600; }
+.patient-dashboard-page .record-note { margin-top: 11px !important; padding: 11px 13px; border-left: 3px solid var(--slate-blue); background: var(--paper); color: var(--ink) !important; font-size: 14px !important; font-weight: 600; }
+.patient-dashboard-page .record-note span { color: var(--ink-soft); font-family: var(--body); font-size: 11px; font-weight: 700; }
 .patient-dashboard-page .appointment-status { margin-top: 1px; padding: 6px 10px; font-size: 12px; font-weight: 700; }
-.patient-dashboard-page .patient-report-record { grid-template-columns: 40px minmax(0,1fr); padding: 19px; border-color: #cfd6db; background: #fff; }
-.patient-dashboard-page .record-icon { width: 40px; height: 40px; background: #e8edf2; color: #243b53; font-size: 11px; font-weight: 700; }
-.patient-dashboard-page .approval-line { margin-top: 8px; color: #243b53; font-size: 13px; font-weight: 700; }
-.patient-dashboard-page .approval-line i { background: #e8edf2; color: #243b53; }
+.patient-dashboard-page .patient-report-record { grid-template-columns: 40px minmax(0,1fr); padding: 19px; border-color: var(--line); background: var(--panel); }
+.patient-dashboard-page .record-icon { width: 40px; height: 40px; background: var(--line); color: var(--ink); font-size: 11px; font-weight: 700; }
+.patient-dashboard-page .approval-line { margin-top: 8px; color: var(--ink); font-size: 13px; font-weight: 700; }
+.patient-dashboard-page .approval-line i { background: var(--line); color: var(--ink); }
 .patient-dashboard-page .patient-report-actions { gap: 11px; margin-top: 5px; padding-top: 15px; }
 .patient-dashboard-page .patient-report-actions .button { min-height: 46px; font-family: var(--body); font-size: 14px; font-weight: 700; }
 .patient-dashboard-page .medicine-bill-record { min-height: 108px; }
 .patient-dashboard-page .medicine-bill-record strong { font-size: 17px; }
 .patient-dashboard-page .medicine-bill-record small { color: #465564; font-size: 14px; font-weight: 600; }
 .patient-dashboard-page .medicine-bill-record p { color: #24333f; font-size: 15px; font-weight: 600; }
-.patient-dashboard-page .medicine-bill-record > span:last-child,.patient-dashboard-page .record-row--link > span:last-child { color: #0a5a68; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.patient-dashboard-page .medicine-bill-record > span:last-child,.patient-dashboard-page .record-row--link > span:last-child { color: var(--teal); font-size: 14px; font-weight: 700; white-space: nowrap; }
 .patient-dashboard-page .portal-empty { color: #465564; font-size: 15px; font-weight: 500; }
 
 /* Doctor administration */
 .doctor-create-card { margin-bottom: 16px; }
 .doctor-admin-list { display: grid; gap: 10px; }
-.doctor-admin-list > article { display: grid; grid-template-columns: minmax(280px,1fr) auto; align-items: center; gap: 10px 18px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #fcfcfa; }
-.doctor-admin-list > article.is-inactive { opacity: .68; background: #f1f1ee; }
+.doctor-admin-list > article { display: grid; grid-template-columns: minmax(280px,1fr) auto; align-items: center; gap: 10px 18px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.doctor-admin-list > article.is-inactive { opacity: .68; background: var(--paper); }
 .doctor-admin-identity { display: flex; align-items: center; gap: 12px; }
 .doctor-admin-identity > div { display: grid; }
 .doctor-admin-identity strong { font-size: 15px; }
