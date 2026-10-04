@@ -33,12 +33,20 @@ def get_engine(database_url: str = None):
 
     logger.info(f"database_backend=sqlite")
 
+    connect_args = {}
+    
+    if primary_url.startswith("postgres://"):
+        primary_url = primary_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif primary_url.startswith("postgresql://"):
+        primary_url = primary_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
     if "sqlite:///" in primary_url:
         path = primary_url.split("sqlite:///")[-1]
         if path.startswith("./"):
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        connect_args = {"check_same_thread": False}
 
-    _engine = create_engine(primary_url, echo=False, pool_pre_ping=True, connect_args={"check_same_thread": False})
+    _engine = create_engine(primary_url, echo=False, pool_pre_ping=True, connect_args=connect_args)
 
     try:
         with _engine.connect() as conn:
